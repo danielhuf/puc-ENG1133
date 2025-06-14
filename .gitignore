@@ -44,4 +44,11 @@ ENV/
 *.csv
 *.log
 *.json
+!requirements.json
+deprecated/
+
+# Project specific
+*.csv
+*.log
+*.json
 !requirements.json 
