@@ -4,7 +4,7 @@
 # This notebook analyzes similarities in the embeddings dataset in three main ways:
 # 1. **Scenario-wise analysis**: Compare different models' responses for the same scenario/dilemma
 # 2. **Model-wise analysis**: Compare different scenarios/dilemmas for the same model
-# 3. **Reason-wise analysis**: Compare different reasoning version for the same model in the same scenario
+# 3. **Reason-wise analysis**: Compare different reasoning versions for the same model in the same scenario
 #
 # The dataset contains embeddings from multiple models (GPT-3.5, GPT-4, Claude, Bison, Gemma, Mistral, Llama)
 # responding to normative evaluation scenarios.
@@ -819,5 +819,222 @@ consistency_analysis = analyze_model_consistency_vs_diversity(
 # - **Most Coherent Reasoning**: Claude (most consistent across different reasoning approaches)
 # - **Most Diverse Perspectives**: GPT-4 and Bison (high variability in responses)
 # - **Best Overall Balance**: Claude (reliable consensus + coherent reasoning + moderate diversity)
+
+# %% [markdown]
+# ## 4. Human vs LLM Analysis: Comparing AI Reasoning with Human Responses
+#
+# This analysis compares how well different LLMs align with human moral reasoning
+# by calculating similarities between LLM-generated reasoning and Reddit top comments
+# (human responses) for the same ethical scenarios.
+
+
+# %% Human-LLM similarity analysis
+def calculate_model_human_similarity(
+    model_name: str, scenario_idx: int, embeddings_dict: Dict[str, np.ndarray]
+) -> float:
+    """Calculate similarity between model's average reasoning and human response for a specific scenario.
+
+    Args:
+        model_name: Name of the model (e.g., 'gpt3.5', 'claude')
+        scenario_idx: Index of the scenario in the dataset
+        embeddings_dict: Dictionary containing all embedding arrays
+
+    Returns:
+        Cosine similarity score between model's average reasoning and human response
+    """
+    # Find all available reasoning types for this model
+    available_reasons = []
+    for col in embeddings_dict.keys():
+        if col.startswith(f"{model_name}_reason_") and col.endswith("_embedding"):
+            available_reasons.append(col)
+
+    if not available_reasons:
+        return None
+
+    # Average all reasoning embeddings for this model-scenario
+    model_embeddings = []
+    for reason_col in available_reasons:
+        model_embeddings.append(embeddings_dict[reason_col][scenario_idx])
+
+    model_avg_embedding = np.mean(model_embeddings, axis=0).reshape(1, -1)
+    human_embedding = embeddings_dict["top_comment_embedding"][scenario_idx].reshape(
+        1, -1
+    )
+
+    # Normalize and calculate similarity
+    model_norm = normalize(model_avg_embedding, norm="l2")
+    human_norm = normalize(human_embedding, norm="l2")
+
+    return cosine_similarity(model_norm, human_norm)[0, 0]
+
+
+def analyze_human_llm_similarities(
+    embeddings_dict: Dict[str, np.ndarray], models: List[str]
+) -> Dict[str, np.ndarray]:
+    """Analyze similarities between each LLM's reasoning and human responses.
+
+    For each model, calculates the average similarity between the model's reasoning
+    (averaged across all available reasoning approaches) and human responses across
+    all scenarios.
+
+    Args:
+        embeddings_dict: Dictionary mapping column names to embedding arrays
+        models: List of model names to analyze
+
+    Returns:
+        Dictionary with structure:
+        {
+            'model_name': numpy_array_of_similarities_with_humans
+        }
+    """
+    print("Analyzing human-LLM similarities...")
+
+    model_human_similarities = {}
+    n_scenarios = embeddings_dict["top_comment_embedding"].shape[0]
+
+    for model in models:
+        similarities = []
+
+        for scenario_idx in tqdm(
+            range(n_scenarios), desc=f"Processing {model}", leave=False
+        ):
+            sim = calculate_model_human_similarity(model, scenario_idx, embeddings_dict)
+            if sim is not None:
+                similarities.append(sim)
+
+        model_human_similarities[model] = np.array(similarities)
+        print(
+            f"{model}: {len(similarities)} scenarios, mean similarity: {np.mean(similarities):.4f}"
+        )
+
+    return model_human_similarities
+
+
+# Run the human-LLM similarity analysis
+human_llm_similarities = analyze_human_llm_similarities(embeddings_dict, models)
+
+
+# %% Visualize human-LLM similarities
+def plot_human_llm_similarity_comparison(
+    human_llm_similarities: Dict[str, np.ndarray], save_path: str = None
+):
+    """Compare human-LLM similarity distributions across models."""
+
+    model_names = list(human_llm_similarities.keys())
+    n_models = len(model_names)
+
+    # Create figure with separate subplots for each model + box plot
+    height_ratios = [2.5] * n_models + [3]
+
+    fig, axes = plt.subplots(
+        n_models + 1,
+        1,
+        figsize=(12, 2.5 * n_models + 3),
+        gridspec_kw={"height_ratios": height_ratios},
+    )
+
+    if n_models == 1:
+        axes = [axes[0], axes[1]]
+
+    colors = sns.color_palette("husl", n_models)
+
+    # Plot individual distributions for each model
+    for i, (model, similarities) in enumerate(human_llm_similarities.items()):
+        ax = axes[i]
+        ax.hist(
+            similarities,
+            bins=50,
+            alpha=0.7,
+            color=colors[i],
+            edgecolor="black",
+            density=True,
+        )
+
+        mean_sim = np.mean(similarities)
+        ax.set_title(f"{model.upper()}")
+        ax.set_xlabel("Cosine Similarity with Human Responses")
+        ax.set_ylabel("Density")
+        ax.grid(True, alpha=0.3)
+
+        ax.axvline(
+            mean_sim,
+            color="red",
+            linestyle="--",
+            alpha=0.8,
+            label=f"Mean: {mean_sim:.3f}",
+        )
+        ax.legend()
+
+    # Box plot comparison at the bottom
+    ax_box = axes[-1]
+    similarities_data = list(human_llm_similarities.values())
+
+    box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
+
+    for patch, color in zip(box_plot["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+
+    ax_box.set_xlabel("Model")
+    ax_box.set_ylabel("Cosine Similarity with Human Responses")
+    ax_box.set_title("Human-LLM Similarity Comparison")
+    ax_box.tick_params(axis="x", rotation=45)
+    ax_box.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+plot_human_llm_similarity_comparison(
+    human_llm_similarities, results_dir / "human_llm_similarities_comparison.png"
+)
+
+
+# %% Statistical summary of human-LLM similarities
+def summarize_human_llm_characteristics(human_llm_similarities: Dict[str, np.ndarray]):
+    """Provide statistical summary of each model's alignment with human responses."""
+
+    print(f"=== HUMAN-LLM SIMILARITY SUMMARY ===\n")
+
+    summary_data = []
+    for model, similarities in human_llm_similarities.items():
+        summary_data.append(
+            {
+                "Model": model,
+                "Mean_Human_Similarity": np.mean(similarities),
+                "Std_Human_Similarity": np.std(similarities),
+                "Min_Human_Similarity": np.min(similarities),
+                "Max_Human_Similarity": np.max(similarities),
+                "Q25": np.percentile(similarities, 25),
+                "Q75": np.percentile(similarities, 75),
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_data).sort_values(
+        "Mean_Human_Similarity", ascending=False
+    )
+
+    print(summary_df.round(4))
+
+    # Overall statistics
+    all_similarities = []
+    for similarities in human_llm_similarities.values():
+        all_similarities.extend(similarities)
+
+    print(f"\n=== OVERALL HUMAN-LLM ALIGNMENT ===")
+    print(
+        f"Mean human-LLM similarity across all models: {np.mean(all_similarities):.4f}"
+    )
+    print(f"Standard deviation: {np.std(all_similarities):.4f}")
+    print(f"Range: {np.min(all_similarities):.4f} - {np.max(all_similarities):.4f}")
+
+    return summary_df
+
+
+human_llm_summary = summarize_human_llm_characteristics(human_llm_similarities)
+
 
 # %%
