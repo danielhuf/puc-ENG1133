@@ -8,8 +8,6 @@
 #
 # The dataset contains embeddings from multiple models (GPT-3.5, GPT-4, Claude, Bison, Gemma, Mistral, Llama)
 # responding to normative evaluation scenarios.
-
-
 # %% Import libraries
 import pandas as pd
 import numpy as np
@@ -218,12 +216,33 @@ def plot_row_similarity_distribution(row_similarities: Dict, save_path: str = No
     for i, (pair, similarities) in enumerate(pair_similarities.items()):
         if i < len(axes):
             axes[i].hist(similarities, bins=30, alpha=0.7, edgecolor="black")
+
+            # Add mean and median lines
+            mean_sim = np.mean(similarities)
+            median_sim = np.median(similarities)
+
+            axes[i].axvline(
+                mean_sim,
+                color="red",
+                linestyle="--",
+                alpha=0.8,
+                label=f"Mean: {mean_sim:.3f}",
+            )
+            axes[i].axvline(
+                median_sim,
+                color="blue",
+                linestyle="-",
+                alpha=0.8,
+                label=f"Median: {median_sim:.3f}",
+            )
+
             axes[i].set_title(
-                f'{pair.replace("_vs_", " vs ")}\nMean: {np.mean(similarities):.3f}'
+                f'{pair.replace("_vs_", " vs ")}\nMean: {mean_sim:.3f}, Median: {median_sim:.3f}'
             )
             axes[i].set_xlabel("Cosine Similarity")
             axes[i].set_ylabel("Frequency")
             axes[i].grid(True, alpha=0.3)
+            axes[i].legend()
 
     for i in range(len(pair_similarities), len(axes)):
         axes[i].set_visible(False)
@@ -410,6 +429,7 @@ def plot_column_similarity_comparison(column_similarities: Dict, save_path: str 
         )
 
         mean_sim = data["mean_similarity"]
+        median_sim = np.median(data["similarities"])
         ax.set_title(f"{model.upper()}")
         ax.set_xlabel("Cosine Similarity")
         ax.set_ylabel("Density")
@@ -421,6 +441,13 @@ def plot_column_similarity_comparison(column_similarities: Dict, save_path: str 
             linestyle="--",
             alpha=0.8,
             label=f"Mean: {mean_sim:.3f}",
+        )
+        ax.axvline(
+            median_sim,
+            color="blue",
+            linestyle="-",
+            alpha=0.8,
+            label=f"Median: {median_sim:.3f}",
         )
         ax.legend()
 
@@ -608,6 +635,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, save_path: str 
         )
 
         mean_sim = data["mean_similarity"]
+        median_sim = np.median(data["similarities"])
         n_reasons = len(data["available_reasons"])
         ax.set_title(f"{model.upper()} ({n_reasons} reasonings)")
         ax.set_xlabel("Cosine Similarity")
@@ -620,6 +648,13 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, save_path: str 
             linestyle="--",
             alpha=0.8,
             label=f"Mean: {mean_sim:.3f}",
+        )
+        ax.axvline(
+            median_sim,
+            color="blue",
+            linestyle="-",
+            alpha=0.8,
+            label=f"Median: {median_sim:.3f}",
         )
         ax.legend()
 
@@ -951,6 +986,7 @@ def plot_human_llm_similarity_comparison(
         )
 
         mean_sim = np.mean(similarities)
+        median_sim = np.median(similarities)
         ax.set_title(f"{model.upper()}")
         ax.set_xlabel("Cosine Similarity with Human Responses")
         ax.set_ylabel("Density")
@@ -962,6 +998,13 @@ def plot_human_llm_similarity_comparison(
             linestyle="--",
             alpha=0.8,
             label=f"Mean: {mean_sim:.3f}",
+        )
+        ax.axvline(
+            median_sim,
+            color="blue",
+            linestyle="-",
+            alpha=0.8,
+            label=f"Median: {median_sim:.3f}",
         )
         ax.legend()
 
