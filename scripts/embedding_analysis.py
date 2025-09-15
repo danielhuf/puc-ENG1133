@@ -210,7 +210,9 @@ def plot_row_similarity_distribution(row_similarities: Dict):
 
     for i, (pair, similarities) in enumerate(pair_similarities.items()):
         if i < len(axes):
-            axes[i].hist(similarities, bins=30, alpha=0.7, edgecolor="black")
+            axes[i].hist(
+                similarities, bins=30, alpha=0.7, edgecolor="black", color="skyblue"
+            )
 
             # Add mean and median lines
             mean_sim = np.mean(similarities)
@@ -413,7 +415,7 @@ def plot_column_similarity_comparison(column_similarities: Dict):
             data["similarities"],
             bins=50,
             alpha=0.7,
-            color=colors[i],
+            color="skyblue",
             edgecolor="black",
             density=True,
         )
@@ -447,9 +449,9 @@ def plot_column_similarity_comparison(column_similarities: Dict):
 
     box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
 
-    for patch, color in zip(box_plot["boxes"], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
 
     ax_box.set_xlabel("Model")
     ax_box.set_ylabel("Cosine Similarity")
@@ -616,7 +618,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
             data["similarities"],
             bins=50,
             alpha=0.7,
-            color=colors[i],
+            color="skyblue",
             edgecolor="black",
             density=True,
         )
@@ -651,9 +653,9 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
 
     box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
 
-    for patch, color in zip(box_plot["boxes"], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
 
     ax_box.set_xlabel("Model")
     ax_box.set_ylabel("Cosine Similarity")
@@ -961,7 +963,7 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
             similarities,
             bins=50,
             alpha=0.7,
-            color=colors[i],
+            color="skyblue",
             edgecolor="black",
             density=True,
         )
@@ -996,9 +998,9 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
 
     box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
 
-    for patch, color in zip(box_plot["boxes"], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
 
     ax_box.set_xlabel("Model")
     ax_box.set_ylabel("Cosine Similarity with Human Responses")
@@ -1056,6 +1058,3 @@ def summarize_human_llm_characteristics(human_llm_similarities: Dict[str, np.nda
 
 
 summarize_human_llm_characteristics(human_llm_similarities)
-
-
-# %%
