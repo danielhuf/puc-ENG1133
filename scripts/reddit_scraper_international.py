@@ -287,9 +287,10 @@ def main():
 
     print("International AITA Subreddit Scraper")
     print("=" * 50)
-    print(
-        f"Configured subreddits: {', '.join([f'{config['display_name']} (r/{config['name']})' for config in SUBREDDIT_CONFIG.values()])}"
+    configured_list = ", ".join(
+        [f"{config['display_name']} (r/{config['name']})" for config in SUBREDDIT_CONFIG.values()]
     )
+    print(f"Configured subreddits: {configured_list}")
     print(f"Max posts per subreddit: {max_posts}")
     print("=" * 50)
 
