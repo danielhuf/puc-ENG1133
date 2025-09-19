@@ -11,6 +11,7 @@
 # %% Import libraries
 import pandas as pd
 import numpy as np
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics.pairwise import cosine_similarity
@@ -19,6 +20,10 @@ from tqdm import tqdm
 from sklearn.preprocessing import normalize
 import pickle
 from pathlib import Path
+
+plt.rcParams["figure.max_open_warning"] = 0
+plt.rcParams["figure.dpi"] = 100
+plt.rcParams["savefig.dpi"] = 100
 
 plt.style.use("seaborn-v0_8")
 sns.set_palette("husl")
@@ -42,9 +47,7 @@ def load_embeddings(embeddings_file: str) -> Tuple[pd.DataFrame, Dict[str, np.nd
         def parse_embedding(x):
             """Convert string representation to numpy array."""
             if pd.isna(x):
-                # Fill with zeros if missing
                 return np.zeros(768, dtype=np.float32)
-            # Remove brackets and split by spaces to get float values
             return np.fromstring(x.strip("[]"), sep=" ", dtype=np.float32)
 
         embeddings = df[col].apply(parse_embedding).values
@@ -219,18 +222,19 @@ def plot_row_similarity_distribution(row_similarities: Dict):
     else:
         axes = axes.flatten()
 
-    for i, (pair, similarities) in enumerate(pair_similarities.items()):
+    for i, (pair, similarities) in enumerate(
+        tqdm(pair_similarities.items(), desc="Plotting row similarities")
+    ):
         if i < len(axes):
-            sns.histplot(
-                similarities, 
-                bins=30, 
-                alpha=0.7, 
-                edgecolor="black", 
+            axes[i].hist(
+                similarities,
+                bins=20,
+                alpha=0.7,
+                edgecolor="black",
                 color="skyblue",
-                ax=axes[i]
+                density=True,
             )
 
-            # Add mean and median lines
             mean_sim = np.mean(similarities)
             median_sim = np.median(similarities)
 
@@ -424,16 +428,17 @@ def plot_column_similarity_comparison(column_similarities: Dict):
         gridspec_kw={"height_ratios": height_ratios},
     )
 
-    for i, (model, data) in enumerate(column_similarities.items()):
+    for i, (model, data) in enumerate(
+        tqdm(column_similarities.items(), desc="Plotting histograms")
+    ):
         ax = axes[i]
-        sns.histplot(
+        ax.hist(
             data["similarities"],
-            bins=50,
+            bins=30,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            stat="density",
-            ax=ax
+            density=True,
         )
 
         mean_sim = data["mean_similarity"]
@@ -461,14 +466,17 @@ def plot_column_similarity_comparison(column_similarities: Dict):
         ax.legend()
 
     ax_box = axes[-1]
-    
-    box_data = []
-    for i, (model, data) in enumerate(column_similarities.items()):
-        for sim in data["similarities"]:
-            box_data.append({"Model": model, "Similarity": sim})
-    box_df = pd.DataFrame(box_data)
-    
-    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
+
+    similarities_data = [data["similarities"] for data in column_similarities.values()]
+    model_names = list(column_similarities.keys())
+
+    box_plot = ax_box.boxplot(
+        similarities_data, tick_labels=model_names, patch_artist=True
+    )
+
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
     ax_box.set_title("Intra-Model Similarity Comparison")
     ax_box.grid(True, alpha=0.3)
 
@@ -573,7 +581,9 @@ def analyze_reason_similarities(
         for i, reason1 in enumerate(available_reasons):
             for reason2 in available_reasons[i + 1 :]:  # Only unique pairs
                 pair_similarities = []
-                for row_idx in range(n_rows):
+                for row_idx in tqdm(
+                    range(n_rows), desc=f"Processing {model} reason pairs", leave=False
+                ):
                     # Get embeddings for this scenario
                     embedding1 = model_embeddings[reason1][row_idx].reshape(1, -1)
                     embedding2 = model_embeddings[reason2][row_idx].reshape(1, -1)
@@ -606,7 +616,9 @@ if cache_path.exists():
     with open(cache_path, "rb") as f:
         reason_similarities = pickle.load(f)
 else:
-    reason_similarities = analyze_reason_similarities(embeddings_dict, models, reason_types)
+    reason_similarities = analyze_reason_similarities(
+        embeddings_dict, models, reason_types
+    )
     with open(cache_path, "wb") as f:
         pickle.dump(reason_similarities, f)
     print(f"Saved reason_similarities to {cache_path}")
@@ -631,16 +643,17 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
     if n_models == 1:
         axes = [axes[0], axes[1]]
 
-    for i, (model, data) in enumerate(reason_similarities.items()):
+    for i, (model, data) in enumerate(
+        tqdm(reason_similarities.items(), desc="Plotting reason similarities")
+    ):
         ax = axes[i]
-        sns.histplot(
+        ax.hist(
             data["similarities"],
-            bins=50,
+            bins=30,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            stat="density",
-            ax=ax
+            density=True,
         )
 
         mean_sim = data["mean_similarity"]
@@ -670,13 +683,16 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
 
     ax_box = axes[-1]
 
-    box_data = []
-    for i, (model, data) in enumerate(reason_similarities.items()):
-        for sim in data["similarities"]:
-            box_data.append({"Model": model, "Similarity": sim})
-    box_df = pd.DataFrame(box_data)
-    
-    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
+    similarities_data = [data["similarities"] for data in reason_similarities.values()]
+    model_names = list(reason_similarities.keys())
+
+    box_plot = ax_box.boxplot(
+        similarities_data, tick_labels=model_names, patch_artist=True
+    )
+
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
     ax_box.set_title("Reason-wise Similarity Comparison")
     ax_box.grid(True, alpha=0.3)
 
@@ -768,18 +784,27 @@ def cross_analyze_model_similarity(
     plt.figure(figsize=(12, 8))
 
     plot_df = comparison_df.dropna(subset=["Reason_Consistency_Score"])
-    
-    scatter = sns.scatterplot(
-        data=plot_df,
-        x="Intra-Model_Diversity_Score",
-        y="Inter-Model_Similarity_Score",
-        size=120,
+
+    from matplotlib.colors import Normalize
+
+    min_val = plot_df["Reason_Consistency_Score"].min()
+    max_val = plot_df["Reason_Consistency_Score"].max()
+
+    norm = Normalize(vmin=min_val, vmax=max_val)
+
+    scatter = plt.scatter(
+        plot_df["Intra-Model_Diversity_Score"],
+        plot_df["Inter-Model_Similarity_Score"],
+        s=120,
         alpha=0.8,
-        hue="Reason_Consistency_Score",
-        palette="viridis",
-        edgecolor="black",
+        c=plot_df["Reason_Consistency_Score"],
+        cmap="Blues",
+        norm=norm,
+        edgecolors="black",
         linewidth=0.5,
     )
+
+    plt.colorbar(scatter, label="Reason Consistency Score")
 
     for i, row in plot_df.iterrows():
         plt.annotate(
@@ -815,44 +840,6 @@ def cross_analyze_model_similarity(
 cross_analyze_model_similarity(
     row_similarities, column_similarities, reason_similarities
 )
-
-# %% [markdown]
-# ## Summary of Findings
-#
-# This comprehensive analysis examines embedding similarities across all available reasoning types (reason_1 through reason_5) for 7 AI models on 10,806 ethical scenarios, revealing some behavioral patterns in AI ethical decision-making.
-#
-# ### Key Findings:
-#
-# 1. **Inter-Model Agreement** (Mean: 69.4% ± 5.4%):
-#    - Models show reasonable consensus across ethical scenarios (range: 48.5% - 85.7%)
-#    - **Claude** shows highest agreement with other models (73.9% similarity score)
-#    - **Bison** shows lowest agreement with other models (63.7% similarity score)
-#    - Agreement varies significantly by scenario, suggesting some ethical dilemmas create more consensus than others
-#    - 90% of scenarios fall between 62.3% - 76.2% inter-model agreement, showing generally stable but varied consensus
-#
-# 2. **Intra-Model Agreement** (Range: 28.5% - 49.8%):
-#    - **Gemma** is most internally similar (49.8% ± 10.1%) - most predictable responses
-#    - **Bison** is least internally similar (28.5% ± 12.1%) - most unpredictable responses
-#    - Internal similarity range of 21.3% indicates significant diversity in model architectures and training
-#
-# 3. **Reason-wise Consistency** (Range: 72.9% - 90.6%):
-#    - **Claude** shows highest reasoning coherence (90.6% ± 5.6%) - most consistent across different reasoning approaches
-#    - **Mistral** shows lowest reasoning coherence (72.9% ± 11.7%) - most variable across reasoning approaches
-#    - Mean reason-wise consistency (80.7% ± 6.1%) much higher than intra-model consistency, indicating models are more consistent within reasoning types than across scenarios
-#
-# 4. **Three-Dimensional Model Profiles**:
-#    - **Claude**: High inter-model agreement (73.9%), moderate intra-model agreement (43.1%), highest reasoning coherence (90.6%)
-#    - **Gemma**: Moderate inter-model agreement (69.3%), highest intra-model agreement (49.8%), moderate reasoning coherence (76.4%)
-#    - **GPT-4**: Moderate inter-model agreement (67.9%), lowest intra-model agreement (31.9%), moderate reasoning coherence (76.7%)
-#    - **Bison**: Lowest inter-model agreement (63.7%), lowest intra-model agreement (28.5%), high reasoning coherence (82.4%)
-#
-# ### Practical Implications:
-#
-# - **Most Predictable Ethics**: Gemma (highest internal agreement across scenarios)
-# - **Most Coherent Reasoning**: Claude (most consistent across different reasoning approaches)
-# - **Most Diverse Perspectives**: GPT-4 and Bison (high variability in responses)
-# - **Best Overall Balance**: Claude (reliable consensus + coherent reasoning + moderate diversity)
-
 # %% [markdown]
 # ## 4. Human vs LLM Analysis: Comparing AI Reasoning with Human Responses
 #
@@ -968,16 +955,17 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
         axes = [axes[0], axes[1]]
 
     # Plot individual distributions for each model
-    for i, (model, similarities) in enumerate(human_llm_similarities.items()):
+    for i, (model, similarities) in enumerate(
+        tqdm(human_llm_similarities.items(), desc="Plotting human-LLM similarities")
+    ):
         ax = axes[i]
-        sns.histplot(
+        ax.hist(
             similarities,
-            bins=50,
+            bins=30,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            stat="density",
-            ax=ax
+            density=True,
         )
 
         mean_sim = np.mean(similarities)
@@ -1005,14 +993,17 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
         ax.legend()
 
     ax_box = axes[-1]
-    
-    box_data = []
-    for i, (model, similarities) in enumerate(human_llm_similarities.items()):
-        for sim in similarities:
-            box_data.append({"Model": model, "Similarity": sim})
-    box_df = pd.DataFrame(box_data)
-    
-    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
+
+    similarities_data = list(human_llm_similarities.values())
+    model_names = list(human_llm_similarities.keys())
+
+    box_plot = ax_box.boxplot(
+        similarities_data, tick_labels=model_names, patch_artist=True
+    )
+
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
     ax_box.set_xlabel("Model")
     ax_box.set_ylabel("Cosine Similarity with Human Responses")
     ax_box.set_title("Human-LLM Similarity Comparison")
@@ -1060,10 +1051,49 @@ def summarize_human_llm_characteristics(human_llm_similarities: Dict[str, np.nda
     print(
         f"Mean human-LLM similarity across all models: {np.mean(all_similarities):.4f}"
     )
+
     print(f"Standard deviation: {np.std(all_similarities):.4f}")
+
     print(f"Range: {np.min(all_similarities):.4f} - {np.max(all_similarities):.4f}")
 
     return summary_df
 
 
 summarize_human_llm_characteristics(human_llm_similarities)
+
+# %% [markdown]
+# ## Summary of Findings
+#
+# This analysis examines embedding similarities across all available reasoning types (reason_1 through reason_5) for 7 AI models on 10,806 ethical scenarios, revealing some behavioral patterns in AI ethical decision-making.
+#
+# ### Key Findings:
+#
+# 1. **Inter-Model Agreement** (Mean: 69.4% ± 5.4%):
+#    - Models show reasonable consensus across ethical scenarios (range: 48.5% - 85.7%)
+#    - **Claude** shows highest agreement with other models (73.9% similarity score)
+#    - **Bison** shows lowest agreement with other models (63.7% similarity score)
+#    - Agreement varies significantly by scenario, suggesting some ethical dilemmas create more consensus than others
+#    - 90% of scenarios fall between 62.3% - 76.2% inter-model agreement, showing generally stable but varied consensus
+#
+# 2. **Intra-Model Agreement** (Range: 28.5% - 49.8%):
+#    - **Gemma** is most internally similar (49.8% ± 10.1%) - most predictable responses
+#    - **Bison** is least internally similar (28.5% ± 12.1%) - most unpredictable responses
+#    - Internal similarity range of 21.3% indicates significant diversity in model architectures and training
+#
+# 3. **Reason-wise Consistency** (Range: 72.9% - 90.6%):
+#    - **Claude** shows highest reasoning coherence (90.6% ± 5.6%) - most consistent across different reasoning approaches
+#    - **Mistral** shows lowest reasoning coherence (72.9% ± 11.7%) - most variable across reasoning approaches
+#    - Mean reason-wise consistency (80.7% ± 6.1%) much higher than intra-model consistency, indicating models are more consistent within reasoning types than across scenarios
+#
+# 4. **Three-Dimensional Model Profiles**:
+#    - **Claude**: High inter-model agreement (73.9%), moderate intra-model agreement (43.1%), highest reasoning coherence (90.6%)
+#    - **Gemma**: Moderate inter-model agreement (69.3%), highest intra-model agreement (49.8%), moderate reasoning coherence (76.4%)
+#    - **GPT-4**: Moderate inter-model agreement (67.9%), lowest intra-model agreement (31.9%), moderate reasoning coherence (76.7%)
+#    - **Bison**: Lowest inter-model agreement (63.7%), lowest intra-model agreement (28.5%), high reasoning coherence (82.4%)
+#
+# ### Practical Implications:
+#
+# - **Most Predictable Ethics**: Gemma (highest internal agreement across scenarios)
+# - **Most Coherent Reasoning**: Claude (most consistent across different reasoning approaches)
+# - **Most Diverse Perspectives**: GPT-4 and Bison (high variability in responses)
+# - **Best Overall Balance**: Claude (reliable consensus + coherent reasoning + moderate diversity)
