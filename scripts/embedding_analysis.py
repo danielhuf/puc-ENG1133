@@ -330,6 +330,149 @@ print(
     f"Row-wise analysis results saved to {results_dir / 'row_wise_analysis_results.json'}"
 )
 
+
+# %% Display extreme LLM-Human similarity cases
+def display_extreme_llm_human_similarities(
+    row_similarities: Dict, embeddings_dict: Dict
+):
+    """Display the top 5 highest and lowest LLM-Human similarity cases with actual sentences."""
+
+    import pandas as pd
+
+    df_cleaned = pd.read_csv(
+        "../data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv"
+    )
+
+    # Extract all LLM-Human similarity scores
+    llm_human_similarities = []
+
+    for row_idx, row_data in row_similarities.items():
+        for pair, similarity in row_data.items():
+            if "human" in pair and pair != "human_vs_human":
+                llm_model = pair.replace("_vs_human", "").replace("human_vs_", "")
+                llm_human_similarities.append(
+                    {
+                        "row_idx": row_idx,
+                        "llm_model": llm_model,
+                        "similarity": similarity,
+                        "pair": pair,
+                    }
+                )
+
+    # Sort by similarity
+    llm_human_similarities.sort(key=lambda x: x["similarity"])
+
+    # Get top 5 lowest and highest
+    lowest_5 = llm_human_similarities[:5]
+    highest_5 = llm_human_similarities[-5:]
+
+    print("=" * 80)
+    print("EXTREME LLM-HUMAN SIMILARITY CASES")
+    print("=" * 80)
+
+    print("\n🔴 TOP 5 LOWEST SIMILARITY CASES (Most Different)")
+    print("-" * 60)
+
+    for i, case in enumerate(lowest_5, 1):
+        row_idx = case["row_idx"]
+        llm_model = case["llm_model"]
+        similarity = case["similarity"]
+
+        # Get scenario info
+        scenario = df_cleaned.iloc[row_idx]
+        scenario_id = scenario["submission_id"]
+        title = (
+            scenario["title"][:100] + "..."
+            if len(scenario["title"]) > 100
+            else scenario["title"]
+        )
+
+        # Get human comment
+        human_comment = scenario["top_comment"]
+
+        # Get LLM reasoning (try different reason columns)
+        llm_reason = None
+        for reason_col in [
+            f"{llm_model}_reason_1",
+            f"{llm_model}_reason_2",
+            f"{llm_model}_reason_3",
+        ]:
+            if reason_col in scenario and pd.notna(scenario[reason_col]):
+                llm_reason = scenario[reason_col]
+                break
+
+        print(
+            f"\n{i}. Similarity: {similarity:.4f} | Row: {row_idx} | Model: {llm_model.upper()}"
+        )
+        print(f"   Scenario ID: {scenario_id}")
+        print(f"   Title: {title}")
+        print(
+            f"   Human Comment: {human_comment[:200]}{'...' if len(human_comment) > 200 else ''}"
+        )
+        print(
+            f"   {llm_model.upper()} Reasoning: {llm_reason[:200]}{'...' if llm_reason and len(llm_reason) > 200 else ''}"
+        )
+
+    print("\n🟢 TOP 5 HIGHEST SIMILARITY CASES (Most Similar)")
+    print("-" * 60)
+
+    for i, case in enumerate(highest_5, 1):
+        row_idx = case["row_idx"]
+        llm_model = case["llm_model"]
+        similarity = case["similarity"]
+
+        # Get scenario info
+        scenario = df_cleaned.iloc[row_idx]
+        scenario_id = scenario["submission_id"]
+        title = (
+            scenario["title"][:100] + "..."
+            if len(scenario["title"]) > 100
+            else scenario["title"]
+        )
+
+        # Get human comment
+        human_comment = scenario["top_comment"]
+
+        # Get LLM reasoning (try different reason columns)
+        llm_reason = None
+        for reason_col in [
+            f"{llm_model}_reason_1",
+            f"{llm_model}_reason_2",
+            f"{llm_model}_reason_3",
+        ]:
+            if reason_col in scenario and pd.notna(scenario[reason_col]):
+                llm_reason = scenario[reason_col]
+                break
+
+        print(
+            f"\n{i}. Similarity: {similarity:.4f} | Row: {row_idx} | Model: {llm_model.upper()}"
+        )
+        print(f"   Scenario ID: {scenario_id}")
+        print(f"   Title: {title}")
+        print(
+            f"   Human Comment: {human_comment[:200]}{'...' if len(human_comment) > 200 else ''}"
+        )
+        print(
+            f"   {llm_model.upper()} Reasoning: {llm_reason[:200]}{'...' if llm_reason and len(llm_reason) > 200 else ''}"
+        )
+
+    # Summary of models in extreme cases
+    all_extreme_models = [case["llm_model"] for case in lowest_5 + highest_5]
+    model_counts = pd.Series(all_extreme_models).value_counts()
+
+    print("\n📊 LLM MODELS IN EXTREME SIMILARITY CASES:")
+    print("-" * 40)
+    for model, count in model_counts.items():
+        print(f"   {model.upper()}: {count} cases")
+
+    return lowest_5, highest_5
+
+
+# Display extreme cases
+lowest_similarities, highest_similarities = display_extreme_llm_human_similarities(
+    row_similarities, embeddings_dict
+)
+
 # %% [markdown]
 # ## 2. Column-wise Analysis: Scenario Comparison for Same Actors
 #
