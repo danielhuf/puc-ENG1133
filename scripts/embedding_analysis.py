@@ -2,11 +2,11 @@
 # Embedding Similarity Analysis
 #
 # This notebook analyzes similarities in the embeddings dataset in three main ways:
-# 1. **Scenario-wise analysis**: Compare different models' responses for the same scenario/dilemma
-# 2. **Model-wise analysis**: Compare different scenarios/dilemmas for the same model
-# 3. **Reason-wise analysis**: Compare different reasoning versions for the same model in the same scenario
+# 1. **Scenario-wise analysis**: Compare different actors' responses for the same scenario/dilemma
+# 2. **Actor-wise analysis**: Compare different scenarios/dilemmas for the same actor
+# 3. **Reason-wise analysis**: Compare different reasoning versions for the same actor in the same scenario
 #
-# The dataset contains embeddings from multiple models (GPT-3.5, GPT-4, Claude, Bison, Gemma, Mistral, Llama)
+# The dataset contains embeddings from multiple actors (GPT-3.5, GPT-4, Claude, Bison, Gemma, Mistral, Llama)
 # responding to normative evaluation scenarios.
 # %% Import libraries
 import pandas as pd
@@ -19,6 +19,7 @@ from typing import List, Tuple, Dict
 from tqdm import tqdm
 from sklearn.preprocessing import normalize
 import pickle
+import json
 from pathlib import Path
 
 plt.rcParams["figure.max_open_warning"] = 0
@@ -32,16 +33,11 @@ sns.set_palette("husl")
 # %% Load and explore the embeddings data
 def load_embeddings(embeddings_file: str) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """Load embeddings from CSV and organize them by column."""
-    print("Loading embeddings...")
     df = pd.read_csv(embeddings_file)
-    print(f"Dataset shape: {df.shape}")
 
     embedding_cols = [col for col in df.columns if col.endswith("_embedding")]
-    print(f"Embedding columns:")
-    for col in embedding_cols:
-        print(f"  - {col}")
 
-    embeddings_dict = {}  # Will store {column_name: numpy_array_of_all_rows}
+    embeddings_dict = {}
     for col in tqdm(embedding_cols, desc="Processing embedding columns"):
 
         def parse_embedding(x):
@@ -52,7 +48,6 @@ def load_embeddings(embeddings_file: str) -> Tuple[pd.DataFrame, Dict[str, np.nd
 
         embeddings = df[col].apply(parse_embedding).values
 
-        # Stack all individual embeddings into a 2D array (rows x dimensions)
         embeddings_array = np.vstack(embeddings)
         embeddings_dict[col] = embeddings_array
 
@@ -61,59 +56,64 @@ def load_embeddings(embeddings_file: str) -> Tuple[pd.DataFrame, Dict[str, np.nd
 
 df, embeddings_dict = load_embeddings("../data/embeddings_sentence_transformers.csv")
 
-# %% Identify models and reason types
-models = set()
+# %% Identify actors and reason types
+actors = set()
 reason_types = set()
 
 for col in embeddings_dict.keys():
-    if col in ["selftext_embedding", "top_comment_embedding"]:
+    if col in ["selftext_embedding"]:
+        continue
+
+    if col == "top_comment_embedding":
+        actors.add("human")
+        reason_types.add("top_comment")
         continue
 
     parts = col.replace("_embedding", "").split("_")
 
-    model = parts[0]
+    actor = parts[0]
     reason = "_".join(parts[1:])
 
-    models.add(model)
+    actors.add(actor)
     reason_types.add(reason)
 
-models = sorted(list(models))
+actors = sorted(list(actors))
 reason_types = sorted(list(reason_types))
 
 # %% [markdown]
-# ## 1. Row-wise Analysis: Model Comparison for Same Scenarios
+# ## 1. Row-wise Analysis: Actor Comparison for Same Scenarios
 #
-# This analysis compares how different models respond to the same ethical dilemma.
-# For each row (scenario), we calculate similarities between all model pairs.
+# This analysis compares how human redditors and LLM models respond to the same ethical dilemma.
+# For each row (scenario), we calculate similarities between all actor pairs.
 
 
 # %% Row-wise similarity analysis
 def analyze_row_similarities(
     embeddings_dict: Dict[str, np.ndarray],
-    models: List[str],
+    actors: List[str],
     reason_types: List[str],
 ) -> Dict:
-    """Analyze inter-model agreement on the same ethical scenarios (row-wise analysis).
+    """Analyze inter-actor agreement on the same ethical scenarios (row-wise analysis).
 
-    This function compares how different AI models respond to identical ethical dilemmas.
+    This function compares how different LLM models and human redditors respond to identical ethical dilemmas.
     For each scenario (row) in the dataset, it calculates similarities between all possible
-    model pairs by comparing their reasoning embeddings.
+    actor pairs by comparing their reasoning embeddings.
 
-    The analysis accounts for models having different numbers of reasoning approaches
+    The analysis accounts for actors having different numbers of reasoning approaches
     (reason_1, reason_2, etc.) by comparing all available combinations and taking the
     mean similarity.
 
     Args:
         embeddings_dict: Dictionary mapping column names to embedding arrays
-        models: List of model names to analyze
+        actors: List of actors to analyze (LLM models and human redditors)
         reason_types: List of available reasoning types (e.g., ['reason_1', 'reason_2'])
 
     Returns:
         Dictionary with structure:
         {
             scenario_id: {
-                'model1_vs_model2': mean_similarity_score,
-                'model1_vs_model3': mean_similarity_score,
+                'actor1_vs_actor2': mean_similarity_score,
+                'actor1_vs_actor3': mean_similarity_score,
                 ...
             }
         }
@@ -125,70 +125,74 @@ def analyze_row_similarities(
         - Returns: mean of both similarities as final 'gpt4_vs_claude' score
     """
 
-    # Find which reason types are available for each model
-    model_reason_combinations = {}
-    for model in models:
+    actor_reason_combinations = {}
+    for actor in actors:
         available_reasons = []
-        for reason_type in reason_types:
-            col_name = f"{model}_{reason_type}_embedding"
-            if col_name in embeddings_dict:
-                available_reasons.append(reason_type)
-        if available_reasons:  # Only include models that have at least one reason type
-            model_reason_combinations[model] = available_reasons
+        if actor == "human":
+            if "top_comment_embedding" in embeddings_dict:
+                available_reasons.append("top_comment")
+        else:
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name in embeddings_dict:
+                    available_reasons.append(reason_type)
+        if available_reasons:
+            actor_reason_combinations[actor] = available_reasons
 
-    # Get number of rows from any available embedding
     first_embedding = next(iter(embeddings_dict.values()))
     n_rows = first_embedding.shape[0]
     row_similarities = {}
 
     for i in tqdm(range(n_rows), desc="Processing rows"):
         row_sims = {}
-        model_names = list(model_reason_combinations.keys())
+        actor_names = list(actor_reason_combinations.keys())
 
-        for j, model1 in enumerate(model_names):
-            for model2 in model_names[j + 1 :]:
-                # Get all available reason types for both models
-                model1_reasons = model_reason_combinations[model1]
-                model2_reasons = model_reason_combinations[model2]
+        for j, actor1 in enumerate(actor_names):
+            for actor2 in actor_names[j + 1 :]:
+                # Get all available reason types for both actors
+                actor1_reasons = actor_reason_combinations[actor1]
+                actor2_reasons = actor_reason_combinations[actor2]
 
                 # Calculate similarities between all combinations
                 pair_similarities = []
-                for reason1 in model1_reasons:
-                    for reason2 in model2_reasons:
-                        col_name1 = f"{model1}_{reason1}_embedding"
-                        col_name2 = f"{model2}_{reason2}_embedding"
+                for reason1 in actor1_reasons:
+                    for reason2 in actor2_reasons:
+                        if actor1 == "human":
+                            col_name1 = "top_comment_embedding"
+                        else:
+                            col_name1 = f"{actor1}_{reason1}_embedding"
 
-                        # Get embeddings for this row
+                        if actor2 == "human":
+                            col_name2 = "top_comment_embedding"
+                        else:
+                            col_name2 = f"{actor2}_{reason2}_embedding"
+
                         embedding1 = embeddings_dict[col_name1][i].reshape(1, -1)
                         embedding2 = embeddings_dict[col_name2][i].reshape(1, -1)
 
-                        # Normalize embeddings
                         embedding1_norm = normalize(embedding1, norm="l2")
                         embedding2_norm = normalize(embedding2, norm="l2")
 
-                        # Calculate cosine similarity
                         similarity = cosine_similarity(
                             embedding1_norm, embedding2_norm
                         )[0, 0]
                         pair_similarities.append(similarity)
 
-                # Take mean of all reason combinations for this model pair
                 mean_similarity = np.mean(pair_similarities)
-                row_sims[f"{model1}_vs_{model2}"] = float(mean_similarity)
+                row_sims[f"{actor1}_vs_{actor2}"] = float(mean_similarity)
 
         row_similarities[i] = row_sims
 
     return row_similarities
 
 
-# Analyze with all available reason types
-cache_path = Path("../data/row_similarities.pkl")
+cache_path = Path("../results/row_similarities.pkl")
 if cache_path.exists():
     print("Loading row_similarities from cache...")
     with open(cache_path, "rb") as f:
         row_similarities = pickle.load(f)
 else:
-    row_similarities = analyze_row_similarities(embeddings_dict, models, reason_types)
+    row_similarities = analyze_row_similarities(embeddings_dict, actors, reason_types)
     with open(cache_path, "wb") as f:
         pickle.dump(row_similarities, f)
     print(f"Saved row_similarities to {cache_path}")
@@ -199,7 +203,7 @@ def plot_row_similarity_distribution(row_similarities: Dict):
     """Plot distribution of similarities across rows.
 
     Shows mean similarities across all available reason type combinations
-    for each model pair.
+    for each actor pair.
     """
 
     pair_similarities = {}
@@ -266,7 +270,7 @@ def plot_row_similarity_distribution(row_similarities: Dict):
 
     plt.tight_layout()
     plt.suptitle(
-        f"Distribution of Row-wise Similarities Between Models\n({n_pairs} pairs)",
+        f"Distribution of Row-wise Similarities Between Actors\n({n_pairs} pairs)",
         y=1.02,
         fontsize=16,
     )
@@ -278,7 +282,7 @@ plot_row_similarity_distribution(row_similarities)
 
 # %% Statistical summary of row-wise similarities
 def summarize_row_characteristics(row_similarities: Dict):
-    """Provide statistical summary of inter-model agreement patterns."""
+    """Provide statistical summary of inter-actor agreement patterns."""
 
     print(f"=== ROW-WISE SIMILARITY SUMMARY ===\n")
 
@@ -291,11 +295,11 @@ def summarize_row_characteristics(row_similarities: Dict):
 
     summary_data = []
     for pair, similarities in pair_stats.items():
-        model1, model2 = pair.split("_vs_")
+        actor1, actor2 = pair.split("_vs_")
         summary_data.append(
             {
-                "Model_1": model1,
-                "Model_2": model2,
+                "Actor_1": actor1,
+                "Actor_2": actor2,
                 "Mean_Similarity": np.mean(similarities),
                 "Std_Similarity": np.std(similarities),
                 "Min_Similarity": np.min(similarities),
@@ -305,41 +309,45 @@ def summarize_row_characteristics(row_similarities: Dict):
             }
         )
 
-    summary_df = pd.DataFrame(summary_data).sort_values(["Model_1", "Model_2"])
+    summary_df = pd.DataFrame(summary_data).sort_values(["Actor_1", "Actor_2"])
     print(summary_df.round(4))
-
-    all_similarities = []
-    for similarities in pair_stats.values():
-        all_similarities.extend(similarities)
-
-    print(f"\n=== OVERALL INTER-MODEL AGREEMENT ===")
-    print(f"Mean agreement across all model pairs: {np.mean(all_similarities):.4f}")
-    print(f"Standard deviation: {np.std(all_similarities):.4f}")
-    print(f"Range: {np.min(all_similarities):.4f} - {np.max(all_similarities):.4f}")
 
     return summary_df
 
 
-summarize_row_characteristics(row_similarities)
+row_summary_df = summarize_row_characteristics(row_similarities)
+
+# %% Save row-wise analysis results
+# Create results directory if it doesn't exist
+results_dir = Path("../results")
+results_dir.mkdir(exist_ok=True)
+
+# Save row-wise analysis results as JSON
+row_summary_dict = row_summary_df.to_dict("records")
+with open(results_dir / "row_wise_analysis_results.json", "w") as f:
+    json.dump(row_summary_dict, f, indent=2)
+print(
+    f"Row-wise analysis results saved to {results_dir / 'row_wise_analysis_results.json'}"
+)
 
 # %% [markdown]
-# ## 2. Column-wise Analysis: Scenario Comparison for Same Models
+# ## 2. Column-wise Analysis: Scenario Comparison for Same Actors
 #
-# This analysis compares how similar different scenarios are when processed by the same model.
-# We'll calculate intra-model similarities across all scenarios.
+# This analysis compares how similar the embeddings ofdifferent scenarios are when processed by the same actor.
+# We'll calculate intra-actor similarities across all scenarios.
 
 
 # %% Column-wise similarity analysis
 def analyze_column_similarities(
     embeddings_dict: Dict[str, np.ndarray],
-    models: List[str],
+    actors: List[str],
     reason_types: List[str],
 ) -> Dict:
-    """Analyze intra-model similarity across different ethical scenarios (column-wise analysis).
+    """Analyze intra-actor similarity across different ethical scenarios (column-wise analysis).
 
-    This function measures how consistent each AI model is when responding to different
+    This function measures how consistent each actor is when responding to different
     ethical dilemmas. It calculates the similarity between all pairs of scenarios for
-    each model.
+    each actor.
 
     The analysis averages all available reasoning approaches (reason_1, reason_2, etc.)
     per scenario, then computes similarities between these aggregated representations
@@ -347,88 +355,90 @@ def analyze_column_similarities(
 
     Args:
         embeddings_dict: Dictionary mapping column names to embedding arrays
-        models: List of model names to analyze
+        actors: List of actor names to analyze
         reason_types: List of available reasoning types to aggregate
 
     Returns:
         Dictionary with structure:
         {
-            'model_name': {
+            'actor_name': {
                 'similarities': numpy_array_of_all_pairwise_similarities,
                 'mean_similarity': average_similarity_score,
                 'std_similarity': variability_in_similarity
             }
         }
 
-    1. For each model, aggregate all reasoning types per scenario (mean embedding)
+    1. For each actor, aggregate all reasoning types per scenario (mean embedding)
     2. Compute cosine similarity matrix between all aggregated scenario pairs
     3. Extract upper triangle to get unique pairwise similarities
     4. Calculate statistics on the resulting similarity distribution
     """
 
-    model_similarities = {}
+    actor_similarities = {}
 
-    for model in models:
-        # Find which reason types are available for this model
+    for actor in actors:
         available_reasons = []
-        model_embeddings = {}
-        for reason_type in reason_types:
-            col_name = f"{model}_{reason_type}_embedding"
-            if col_name in embeddings_dict:
-                available_reasons.append(reason_type)
-                model_embeddings[reason_type] = embeddings_dict[col_name]
+        actor_embeddings = {}
 
-        if not available_reasons:  # Skip if no reason types available
+        if actor == "human":
+            if "top_comment_embedding" in embeddings_dict:
+                available_reasons.append("top_comment")
+                actor_embeddings["top_comment"] = embeddings_dict[
+                    "top_comment_embedding"
+                ]
+        else:
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name in embeddings_dict:
+                    available_reasons.append(reason_type)
+                    actor_embeddings[reason_type] = embeddings_dict[col_name]
+
+        if not available_reasons:
             continue
 
-        # Stack all reason embeddings for this model
         all_reason_embeddings = []
         for reason in available_reasons:
-            embeddings = model_embeddings[reason]
+            embeddings = actor_embeddings[reason]
             all_reason_embeddings.append(embeddings)
 
-        # Calculate mean across reason types for each row
         mean_embeddings = np.mean(all_reason_embeddings, axis=0)
 
-        # Normalize embeddings
         mean_embeddings_norm = normalize(mean_embeddings, norm="l2")
 
-        # Calculate similarity matrix
         similarity_matrix = cosine_similarity(mean_embeddings_norm)
 
-        # Extract upper triangle to get unique pairs
         upper_triangle = np.triu(similarity_matrix, k=1)
         similarities = upper_triangle[upper_triangle != 0]
 
-        model_similarities[model] = {
+        actor_similarities[actor] = {
             "similarities": similarities,
             "mean_similarity": np.mean(similarities),
             "std_similarity": np.std(similarities),
         }
 
-    return model_similarities
+    return actor_similarities
 
 
-column_similarities = analyze_column_similarities(embeddings_dict, models, reason_types)
+column_similarities = analyze_column_similarities(embeddings_dict, actors, reason_types)
 
 
 # %% Visualize column-wise similarities
 def plot_column_similarity_comparison(column_similarities: Dict):
-    """Compare intra-model similarity distributions."""
+    """Compare intra-actor similarity distributions."""
 
-    model_names = list(column_similarities.keys())
-    n_models = len(model_names)
+    actor_names = list(column_similarities.keys())
+    n_actors = len(actor_names)
 
-    height_ratios = [2.5] * n_models + [3]
+    height_ratios = [2.5] * n_actors + [3]
 
     fig, axes = plt.subplots(
-        n_models + 1,
+        n_actors + 1,
         1,
-        figsize=(12, 2.5 * n_models + 3),
+        figsize=(12, 2.5 * n_actors + 3),
         gridspec_kw={"height_ratios": height_ratios},
     )
 
-    for i, (model, data) in enumerate(
+    for i, (actor, data) in enumerate(
         tqdm(column_similarities.items(), desc="Plotting histograms")
     ):
         ax = axes[i]
@@ -443,7 +453,7 @@ def plot_column_similarity_comparison(column_similarities: Dict):
 
         mean_sim = data["mean_similarity"]
         median_sim = np.median(data["similarities"])
-        ax.set_title(f"{model.upper()}")
+        ax.set_title(f"{actor.upper()}")
         ax.set_xlabel("Cosine Similarity")
         ax.set_ylabel("Density")
         ax.grid(True, alpha=0.3)
@@ -468,16 +478,16 @@ def plot_column_similarity_comparison(column_similarities: Dict):
     ax_box = axes[-1]
 
     similarities_data = [data["similarities"] for data in column_similarities.values()]
-    model_names = list(column_similarities.keys())
+    actor_names = list(column_similarities.keys())
 
     box_plot = ax_box.boxplot(
-        similarities_data, tick_labels=model_names, patch_artist=True
+        similarities_data, tick_labels=actor_names, patch_artist=True
     )
 
     for patch in box_plot["boxes"]:
         patch.set_facecolor("skyblue")
         patch.set_alpha(0.8)
-    ax_box.set_title("Intra-Model Similarity Comparison")
+    ax_box.set_title("Intra-Actor Similarity Comparison")
     ax_box.grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -487,17 +497,17 @@ def plot_column_similarity_comparison(column_similarities: Dict):
 plot_column_similarity_comparison(column_similarities)
 
 
-# %% Statistical summary of model differences
+# %% Statistical summary of actor differences
 def summarize_column_characteristics(column_similarities: Dict):
-    """Provide statistical summary of each model's characteristics."""
+    """Provide statistical summary of each actor's characteristics."""
 
     print(f"=== COLUMN-WISE SIMILARITY SUMMARY ===\n")
 
     summary_data = []
-    for model, data in column_similarities.items():
+    for actor, data in column_similarities.items():
         summary_data.append(
             {
-                "Model": model,
+                "Actor": actor,
                 "Mean Similarity": data["mean_similarity"],
                 "Std Similarity": data["std_similarity"],
                 "Min Similarity": np.min(data["similarities"]),
@@ -507,55 +517,64 @@ def summarize_column_characteristics(column_similarities: Dict):
             }
         )
 
-    summary_df = pd.DataFrame(summary_data).sort_values("Model")
+    summary_df = pd.DataFrame(summary_data).sort_values("Actor")
 
     print(summary_df.round(4))
 
     return summary_df
 
 
-summarize_column_characteristics(column_similarities)
+column_summary_df = summarize_column_characteristics(column_similarities)
+
+# %% Save column-wise analysis results
+# Save column-wise analysis results as JSON
+column_summary_dict = column_summary_df.to_dict("records")
+with open(results_dir / "column_wise_analysis_results.json", "w") as f:
+    json.dump(column_summary_dict, f, indent=2)
+print(
+    f"Column-wise analysis results saved to {results_dir / 'column_wise_analysis_results.json'}"
+)
 
 # %% [markdown]
-# ## 3. Reason-wise Analysis: Different Reasoning Approaches for Same Model-Scenario
+# ## 3. Reason-wise Analysis: Different Reasoning Approaches for Same Actor-Scenario
 #
-# This analysis compares how consistent each model is across its different reasoning
+# This analysis compares how consistent each actor is across its different reasoning
 # approaches for the same ethical scenarios.
 
 
 # %% Reason-wise similarity analysis
 def analyze_reason_similarities(
     embeddings_dict: Dict[str, np.ndarray],
-    models: List[str],
+    actors: List[str],
     reason_types: List[str],
 ) -> Dict:
-    """Analyze intra-model reasoning consistency across different reasoning approaches (reason-wise analysis).
+    """Analyze intra-actor reasoning consistency across different reasoning approaches (reason-wise analysis).
 
-    This function examines how consistent each AI model is when applying different reasoning
-    approaches to the same ethical scenario. It measures the similarity between a model's
+    This function examines how consistent each actor is when applying different reasoning
+    approaches to the same ethical scenario. It measures the similarity between a actor's
     various reasoning types (reason_1, reason_2, etc.) when confronted with identical
     ethical dilemmas.
 
-    For each model-scenario combination, the function compares all available reasoning
+    For each actor-scenario combination, the function compares all available reasoning
     approaches pairwise and aggregates the results across all scenarios.
 
     Args:
         embeddings_dict: Dictionary mapping column names to embedding arrays
-        models: List of model names to analyze
+        actors: List of actor names to analyze
         reason_types: List of available reasoning types to compare
 
     Returns:
         Dictionary with structure:
         {
-            'model_name': {
+            'actor_name': {
                 'similarities': numpy_array_of_all_reason_pair_similarities,
                 'mean_similarity': average_reasoning_similarity,
                 'std_similarity': variability_in_reasoning_consistency,
-                'available_reasons': list_of_reasoning_types_for_model
+                'available_reasons': list_of_reasoning_types_for_actor
             }
         }
 
-    1. For each model, identify available reasoning approaches
+    1. For each actor, identify available reasoning approaches
     2. For each scenario, compare all unique reasoning type pairs
     3. Aggregate similarity scores across all scenarios and reason pairs
     4. Calculate statistics on the resulting similarity distribution
@@ -563,17 +582,35 @@ def analyze_reason_similarities(
 
     reason_similarities = {}
 
-    for model in tqdm(models, desc="Processing models"):
-        # Find which reason types are available for this model
+    for actor in tqdm(actors, desc="Processing actors"):
         available_reasons = []
-        model_embeddings = {}
-        for reason_type in reason_types:
-            col_name = f"{model}_{reason_type}_embedding"
-            if col_name in embeddings_dict:
-                available_reasons.append(reason_type)
-                model_embeddings[reason_type] = embeddings_dict[col_name]
+        actor_embeddings = {}
 
-        n_rows = model_embeddings[available_reasons[0]].shape[0]
+        if actor == "human":
+            if "top_comment_embedding" in embeddings_dict:
+                available_reasons.append("top_comment")
+                actor_embeddings["top_comment"] = embeddings_dict[
+                    "top_comment_embedding"
+                ]
+                # For human actor, reason consistency is 1.0 (perfect consistency since only one comment per scenario)
+                reason_similarities[actor] = {
+                    "similarities": np.array([1.0]),
+                    "mean_similarity": 1.0,
+                    "std_similarity": 0.0,
+                    "available_reasons": available_reasons,
+                }
+            continue
+        else:
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name in embeddings_dict:
+                    available_reasons.append(reason_type)
+                    actor_embeddings[reason_type] = embeddings_dict[col_name]
+
+        if not available_reasons:
+            continue
+
+        n_rows = actor_embeddings[available_reasons[0]].shape[0]
 
         # Calculate similarities between all reason pairs for each scenario
         all_similarities = []
@@ -582,17 +619,14 @@ def analyze_reason_similarities(
             for reason2 in available_reasons[i + 1 :]:  # Only unique pairs
                 pair_similarities = []
                 for row_idx in tqdm(
-                    range(n_rows), desc=f"Processing {model} reason pairs", leave=False
+                    range(n_rows), desc=f"Processing {actor} reason pairs", leave=False
                 ):
-                    # Get embeddings for this scenario
-                    embedding1 = model_embeddings[reason1][row_idx].reshape(1, -1)
-                    embedding2 = model_embeddings[reason2][row_idx].reshape(1, -1)
+                    embedding1 = actor_embeddings[reason1][row_idx].reshape(1, -1)
+                    embedding2 = actor_embeddings[reason2][row_idx].reshape(1, -1)
 
-                    # Normalize embeddings
                     embedding1_norm = normalize(embedding1, norm="l2")
                     embedding2_norm = normalize(embedding2, norm="l2")
 
-                    # Calculate cosine similarity
                     similarity = cosine_similarity(embedding1_norm, embedding2_norm)[
                         0, 0
                     ]
@@ -600,7 +634,7 @@ def analyze_reason_similarities(
 
                 all_similarities.extend(pair_similarities)
 
-        reason_similarities[model] = {
+        reason_similarities[actor] = {
             "similarities": np.array(all_similarities),
             "mean_similarity": np.mean(all_similarities),
             "std_similarity": np.std(all_similarities),
@@ -610,14 +644,14 @@ def analyze_reason_similarities(
     return reason_similarities
 
 
-cache_path = Path("../data/reason_similarities.pkl")
+cache_path = Path("../results/reason_similarities.pkl")
 if cache_path.exists():
     print("Loading reason_similarities from cache...")
     with open(cache_path, "rb") as f:
         reason_similarities = pickle.load(f)
 else:
     reason_similarities = analyze_reason_similarities(
-        embeddings_dict, models, reason_types
+        embeddings_dict, actors, reason_types
     )
     with open(cache_path, "wb") as f:
         pickle.dump(reason_similarities, f)
@@ -626,24 +660,24 @@ else:
 
 # %% Visualize reason-wise similarities
 def plot_reason_similarity_comparison(reason_similarities: Dict):
-    """Compare reason-wise similarity distributions with separate subplots for each model."""
+    """Compare reason-wise similarity distributions with separate subplots for each actor."""
 
-    model_names = list(reason_similarities.keys())
-    n_models = len(model_names)
+    actor_names = list(reason_similarities.keys())
+    n_actors = len(actor_names)
 
-    height_ratios = [2.5] * n_models + [3]
+    height_ratios = [2.5] * n_actors + [3]
 
     fig, axes = plt.subplots(
-        n_models + 1,
+        n_actors + 1,
         1,
-        figsize=(12, 2.5 * n_models + 3),
+        figsize=(12, 2.5 * n_actors + 3),
         gridspec_kw={"height_ratios": height_ratios},
     )
 
-    if n_models == 1:
+    if n_actors == 1:
         axes = [axes[0], axes[1]]
 
-    for i, (model, data) in enumerate(
+    for i, (actor, data) in enumerate(
         tqdm(reason_similarities.items(), desc="Plotting reason similarities")
     ):
         ax = axes[i]
@@ -659,7 +693,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
         mean_sim = data["mean_similarity"]
         median_sim = np.median(data["similarities"])
         n_reasons = len(data["available_reasons"])
-        ax.set_title(f"{model.upper()} ({n_reasons} reasonings)")
+        ax.set_title(f"{actor.upper()} ({n_reasons} reasonings)")
         ax.set_xlabel("Cosine Similarity")
         ax.set_ylabel("Density")
         ax.grid(True, alpha=0.3)
@@ -684,10 +718,10 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
     ax_box = axes[-1]
 
     similarities_data = [data["similarities"] for data in reason_similarities.values()]
-    model_names = list(reason_similarities.keys())
+    actor_names = list(reason_similarities.keys())
 
     box_plot = ax_box.boxplot(
-        similarities_data, tick_labels=model_names, patch_artist=True
+        similarities_data, tick_labels=actor_names, patch_artist=True
     )
 
     for patch in box_plot["boxes"]:
@@ -705,7 +739,7 @@ plot_reason_similarity_comparison(reason_similarities)
 
 # %% Statistical summary of reason-wise characteristics
 def summarize_reason_characteristics(reason_similarities: Dict):
-    """Provide statistical summary of each model's reason-wise characteristics."""
+    """Provide statistical summary of each actor's reason-wise characteristics."""
 
     if not reason_similarities:
         print("No reason-wise data available for analysis")
@@ -714,10 +748,10 @@ def summarize_reason_characteristics(reason_similarities: Dict):
     print(f"=== REASON-WISE SIMILARITY SUMMARY ===\n")
 
     summary_data = []
-    for model, data in reason_similarities.items():
+    for actor, data in reason_similarities.items():
         summary_data.append(
             {
-                "Model": model,
+                "Actor": actor,
                 "Mean Similarity": data["mean_similarity"],
                 "Std Similarity": data["std_similarity"],
                 "Min Similarity": np.min(data["similarities"]),
@@ -728,52 +762,56 @@ def summarize_reason_characteristics(reason_similarities: Dict):
             }
         )
 
-    summary_df = pd.DataFrame(summary_data).sort_values("Model")
+    summary_df = pd.DataFrame(summary_data).sort_values("Actor")
 
     print(summary_df.round(4))
 
     return summary_df
 
 
-summarize_reason_characteristics(reason_similarities)
+reason_summary_df = summarize_reason_characteristics(reason_similarities)
+
+# %% Save reason-wise analysis results
+# Save reason-wise analysis results as JSON
+reason_summary_dict = reason_summary_df.to_dict("records")
+with open(results_dir / "reason_wise_analysis_results.json", "w") as f:
+    json.dump(reason_summary_dict, f, indent=2)
+print(
+    f"Reason-wise analysis results saved to {results_dir / 'reason_wise_analysis_results.json'}"
+)
 
 
-# %% Cross-analysis: Intra-Model similarity vs. inter-model similarity
-def cross_analyze_model_similarity(
+# %% Cross-analysis: Intra-Actor similarity vs. inter-Actor similarity
+def cross_analyze_actor_similarity(
     row_similarities: Dict, column_similarities: Dict, reason_similarities: Dict
 ):
-    """Analyze the relationship between inter-model similarity and intra-model similarity."""
+    """Analyze the relationship between inter-actor similarity and intra-actor similarity."""
 
-    # Calculate inter-model similarity for each model
-    inter_model_means = {}
-    for model in column_similarities.keys():
-        # Find all pairs that include this model
-        model_pairs = [
-            pair for pair in list(row_similarities.values())[0].keys() if model in pair
+    inter_actor_means = {}
+    for actor in column_similarities.keys():
+        actor_pairs = [
+            pair for pair in list(row_similarities.values())[0].keys() if actor in pair
         ]
         all_similarities = []
 
-        # Collect similarities across all scenarios for this model's pairs
         for row_data in row_similarities.values():
-            for pair in model_pairs:
+            for pair in actor_pairs:
                 if pair in row_data:
                     all_similarities.append(row_data[pair])
 
-        # Calculate mean inter-model similarity across all scenarios and pairs
         if all_similarities:
-            inter_model_means[model] = np.mean(all_similarities)
+            inter_actor_means[actor] = np.mean(all_similarities)
 
-    # Create comparison dataset combining inter-model and intra-model metrics
     comparison_data = []
-    for model in column_similarities.keys():
-        if model in inter_model_means:
+    for actor in column_similarities.keys():
+        if actor in inter_actor_means:
             comparison_data.append(
                 {
-                    "Model": model,
-                    "Intra-Model_Diversity_Score": 1
-                    - column_similarities[model]["mean_similarity"],
-                    "Inter-Model_Similarity_Score": inter_model_means[model],
-                    "Reason_Consistency_Score": reason_similarities[model][
+                    "Actor": actor,
+                    "Intra-Actor_Diversity_Score": 1
+                    - column_similarities[actor]["mean_similarity"],
+                    "Inter-Actor_Similarity_Score": inter_actor_means[actor],
+                    "Reason_Consistency_Score": reason_similarities[actor][
                         "mean_similarity"
                     ],
                 }
@@ -793,8 +831,8 @@ def cross_analyze_model_similarity(
     norm = Normalize(vmin=min_val, vmax=max_val)
 
     scatter = plt.scatter(
-        plot_df["Intra-Model_Diversity_Score"],
-        plot_df["Inter-Model_Similarity_Score"],
+        plot_df["Intra-Actor_Diversity_Score"],
+        plot_df["Inter-Actor_Similarity_Score"],
         s=120,
         alpha=0.8,
         c=plot_df["Reason_Consistency_Score"],
@@ -808,17 +846,17 @@ def cross_analyze_model_similarity(
 
     for i, row in plot_df.iterrows():
         plt.annotate(
-            row["Model"],
-            (row["Intra-Model_Diversity_Score"], row["Inter-Model_Similarity_Score"]),
+            row["Actor"],
+            (row["Intra-Actor_Diversity_Score"], row["Inter-Actor_Similarity_Score"]),
             xytext=(5, 5),
             textcoords="offset points",
             fontweight="bold",
         )
 
-    plt.xlabel("1 - Intra-Model Similarity")
-    plt.ylabel("Inter-Model Similarity")
+    plt.xlabel("1 - Intra-Actor Similarity")
+    plt.ylabel("Inter-Actor Similarity")
 
-    title = "Intra-Model similarity vs. inter-model similarity Analysis (Color = Reason-wise consistency)"
+    title = "Intra-Actor similarity vs. inter-Actor similarity Analysis (Color = Reason-wise consistency)"
     plt.title(title)
     plt.grid(True, alpha=0.3)
 
@@ -827,9 +865,9 @@ def cross_analyze_model_similarity(
 
     print("=== COMPLETE ANALYSIS RESULTS ===")
     display_cols = [
-        "Model",
-        "Intra-Model_Diversity_Score",
-        "Inter-Model_Similarity_Score",
+        "Actor",
+        "Intra-Actor_Diversity_Score",
+        "Inter-Actor_Similarity_Score",
         "Reason_Consistency_Score",
     ]
     print(comparison_df[display_cols].round(4))
@@ -837,274 +875,68 @@ def cross_analyze_model_similarity(
     return comparison_df
 
 
-cross_analyze_model_similarity(
+cross_analysis_df = cross_analyze_actor_similarity(
     row_similarities, column_similarities, reason_similarities
 )
-# %% [markdown]
-# ## 4. Human vs LLM Analysis: Comparing AI Reasoning with Human Responses
-#
-# This analysis compares how well different LLMs align with human moral reasoning
-# by calculating similarities between LLM-generated reasoning and Reddit top comments
-# (human responses) for the same ethical scenarios.
 
-
-# %% Human-LLM similarity analysis
-def calculate_model_human_similarity(
-    model_name: str, scenario_idx: int, embeddings_dict: Dict[str, np.ndarray]
-) -> float:
-    """Calculate similarity between model's average reasoning and human response for a specific scenario.
-
-    Args:
-        model_name: Name of the model (e.g., 'gpt3.5', 'claude')
-        scenario_idx: Index of the scenario in the dataset
-        embeddings_dict: Dictionary containing all embedding arrays
-
-    Returns:
-        Cosine similarity score between model's average reasoning and human response
-    """
-    # Find all available reasoning types for this model
-    available_reasons = []
-    for col in embeddings_dict.keys():
-        if col.startswith(f"{model_name}_reason_") and col.endswith("_embedding"):
-            available_reasons.append(col)
-
-    if not available_reasons:
-        return None
-
-    # Average all reasoning embeddings for this model-scenario
-    model_embeddings = []
-    for reason_col in available_reasons:
-        model_embeddings.append(embeddings_dict[reason_col][scenario_idx])
-
-    model_avg_embedding = np.mean(model_embeddings, axis=0).reshape(1, -1)
-    human_embedding = embeddings_dict["top_comment_embedding"][scenario_idx].reshape(
-        1, -1
-    )
-
-    # Normalize and calculate similarity
-    model_norm = normalize(model_avg_embedding, norm="l2")
-    human_norm = normalize(human_embedding, norm="l2")
-
-    return cosine_similarity(model_norm, human_norm)[0, 0]
-
-
-def analyze_human_llm_similarities(
-    embeddings_dict: Dict[str, np.ndarray], models: List[str]
-) -> Dict[str, np.ndarray]:
-    """Analyze similarities between each LLM's reasoning and human responses.
-
-    For each model, calculates the average similarity between the model's reasoning
-    (averaged across all available reasoning approaches) and human responses across
-    all scenarios.
-
-    Args:
-        embeddings_dict: Dictionary mapping column names to embedding arrays
-        models: List of model names to analyze
-
-    Returns:
-        Dictionary with structure:
-        {
-            'model_name': numpy_array_of_similarities_with_humans
-        }
-    """
-    print("Analyzing human-LLM similarities...")
-
-    model_human_similarities = {}
-    n_scenarios = embeddings_dict["top_comment_embedding"].shape[0]
-
-    for model in models:
-        similarities = []
-
-        for scenario_idx in tqdm(
-            range(n_scenarios), desc=f"Processing {model}", leave=False
-        ):
-            sim = calculate_model_human_similarity(model, scenario_idx, embeddings_dict)
-            if sim is not None:
-                similarities.append(sim)
-
-        model_human_similarities[model] = np.array(similarities)
-        print(
-            f"{model}: {len(similarities)} scenarios, mean similarity: {np.mean(similarities):.4f}"
-        )
-
-    return model_human_similarities
-
-
-# Run the human-LLM similarity analysis
-human_llm_similarities = analyze_human_llm_similarities(embeddings_dict, models)
-
-
-# %% Visualize human-LLM similarities
-def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.ndarray]):
-    """Compare human-LLM similarity distributions across models."""
-
-    model_names = list(human_llm_similarities.keys())
-    n_models = len(model_names)
-
-    # Create figure with separate subplots for each model + box plot
-    height_ratios = [2.5] * n_models + [3]
-
-    fig, axes = plt.subplots(
-        n_models + 1,
-        1,
-        figsize=(12, 2.5 * n_models + 3),
-        gridspec_kw={"height_ratios": height_ratios},
-    )
-
-    if n_models == 1:
-        axes = [axes[0], axes[1]]
-
-    # Plot individual distributions for each model
-    for i, (model, similarities) in enumerate(
-        tqdm(human_llm_similarities.items(), desc="Plotting human-LLM similarities")
-    ):
-        ax = axes[i]
-        ax.hist(
-            similarities,
-            bins=30,
-            alpha=0.7,
-            color="skyblue",
-            edgecolor="black",
-            density=True,
-        )
-
-        mean_sim = np.mean(similarities)
-        median_sim = np.median(similarities)
-        ax.set_title(f"{model.upper()}")
-        ax.set_xlabel("Cosine Similarity with Human Responses")
-        ax.set_ylabel("Density")
-        ax.grid(True, alpha=0.3)
-
-        ax.axvline(
-            mean_sim,
-            color="red",
-            linestyle="--",
-            alpha=0.8,
-            label=f"Mean: {mean_sim:.3f}",
-        )
-        ax.axvline(
-            median_sim,
-            color="blue",
-            linestyle="-",
-            alpha=0.8,
-            label=f"Median: {median_sim:.3f}",
-        )
-        ax.set_xlim(0, 1)
-        ax.legend()
-
-    ax_box = axes[-1]
-
-    similarities_data = list(human_llm_similarities.values())
-    model_names = list(human_llm_similarities.keys())
-
-    box_plot = ax_box.boxplot(
-        similarities_data, tick_labels=model_names, patch_artist=True
-    )
-
-    for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
-        patch.set_alpha(0.8)
-    ax_box.set_xlabel("Model")
-    ax_box.set_ylabel("Cosine Similarity with Human Responses")
-    ax_box.set_title("Human-LLM Similarity Comparison")
-    ax_box.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.show()
-
-
-plot_human_llm_similarity_comparison(human_llm_similarities)
-
-
-# %% Statistical summary of human-LLM similarities
-def summarize_human_llm_characteristics(human_llm_similarities: Dict[str, np.ndarray]):
-    """Provide statistical summary of each model's alignment with human responses."""
-
-    print(f"=== HUMAN-LLM SIMILARITY SUMMARY ===\n")
-
-    summary_data = []
-    for model, similarities in human_llm_similarities.items():
-        summary_data.append(
-            {
-                "Model": model,
-                "Mean_Human_Similarity": np.mean(similarities),
-                "Std_Human_Similarity": np.std(similarities),
-                "Min_Human_Similarity": np.min(similarities),
-                "Max_Human_Similarity": np.max(similarities),
-                "Q25": np.percentile(similarities, 25),
-                "Q75": np.percentile(similarities, 75),
-            }
-        )
-
-    summary_df = pd.DataFrame(summary_data).sort_values(
-        "Mean_Human_Similarity", ascending=False
-    )
-
-    print(summary_df.round(4))
-
-    # Overall statistics
-    all_similarities = []
-    for similarities in human_llm_similarities.values():
-        all_similarities.extend(similarities)
-
-    print(f"\n=== OVERALL HUMAN-LLM ALIGNMENT ===")
-    print(
-        f"Mean human-LLM similarity across all models: {np.mean(all_similarities):.4f}"
-    )
-
-    print(f"Standard deviation: {np.std(all_similarities):.4f}")
-
-    print(f"Range: {np.min(all_similarities):.4f} - {np.max(all_similarities):.4f}")
-
-    return summary_df
-
-
-summarize_human_llm_characteristics(human_llm_similarities)
+# %% Save cross-analysis results
+# Save cross-analysis results as JSON
+cross_analysis_dict = cross_analysis_df.to_dict("records")
+with open(results_dir / "cross_analysis_results.json", "w") as f:
+    json.dump(cross_analysis_dict, f, indent=2)
+print(f"Cross-analysis results saved to {results_dir / 'cross_analysis_results.json'}")
 
 # %% [markdown]
 # ## Summary of Findings
 #
-# This analysis examines embedding similarities across all available reasoning types (reason_1 through reason_5) for 7 AI models on 10,806 ethical scenarios, revealing some behavioral patterns in AI ethical decision-making.
+# This analysis examines embedding similarities across all available reasoning types for 7 LLM actors and human responses on ethical scenarios, revealing distinct behavioral patterns in ethical decision-making.
 #
 # ### Key Findings:
 #
-# 1. **Inter-Model Agreement** (Mean: 69.4% ± 5.4%):
-#    - Models show reasonable consensus across ethical scenarios (range: 48.5% - 85.7%)
-#    - **Claude** shows highest agreement with other models (73.9% similarity score)
-#    - **Bison** shows lowest agreement with other models (63.7% similarity score)
-#    - Agreement varies significantly by scenario, suggesting some ethical dilemmas create more consensus than others
-#    - 90% of scenarios fall between 62.3% - 76.2% inter-model agreement, showing generally stable but varied consensus
+# 1. **Inter-Actor Agreement** (LLM-to-LLM similarity range: 59.1% - 79.6%):
+#    - **Claude** shows highest agreement with other LLMs (77.5% with GPT-3.5, 79.6% with Llama)
+#    - **Bison** shows lowest agreement with other LLMs (59.1% with Mistral, 61.6% with Gemma)
+#    - LLM actors generally show moderate to high consensus (mean ~68%) across ethical scenarios
+#    - **Human responses** show much lower agreement with LLMs (40.1% - 46.9% similarity)
+#    - Human-LLM alignment is consistently lower than inter-LLM agreement, indicating distinct reasoning patterns
 #
-# 2. **Intra-Model Agreement** (Range: 28.5% - 49.8%):
-#    - **Gemma** is most internally similar (49.8% ± 10.1%) - most predictable responses
-#    - **Bison** is least internally similar (28.5% ± 12.1%) - most unpredictable responses
-#    - Internal similarity range of 21.3% indicates significant diversity in model architectures and training
+# 2. **Intra-Actor Consistency** (Range: 18.4% - 49.8%):
+#    - **Gemma** is most internally consistent (49.8% ± 10.1%) - most predictable across scenarios
+#    - **Human** responses are least internally consistent (18.4% ± 12.2%) - most context-dependent
+#    - **GPT-4** shows low internal consistency (31.9% ± 12.4%) - most diverse across scenarios
+#    - **Bison** shows moderate internal consistency (28.5% ± 12.1%) - balanced variability
+#    - Internal consistency range of 31.4% indicates significant diversity in actor response patterns
 #
-# 3. **Reason-wise Consistency** (Range: 72.9% - 90.6%):
-#    - **Claude** shows highest reasoning coherence (90.6% ± 5.6%) - most consistent across different reasoning approaches
+# 3. **Reason-wise Consistency** (Range: 72.9% - 100%):
+#    - **Human** shows perfect reasoning consistency (100%) - single reasoning approach per scenario
+#    - **Claude** shows highest LLM reasoning coherence (90.6% ± 5.6%) - most consistent across reasoning approaches
 #    - **Mistral** shows lowest reasoning coherence (72.9% ± 11.7%) - most variable across reasoning approaches
-#    - Mean reason-wise consistency (80.7% ± 6.1%) much higher than intra-model consistency, indicating models are more consistent within reasoning types than across scenarios
+#    - Mean LLM reason-wise consistency (80.7% ± 6.1%) much higher than intra-actor consistency
+#    - This indicates actors are more consistent within reasoning types than across different scenarios
 #
-# 4. **Three-Dimensional Model Profiles**:
-#    - **Claude**: High inter-model agreement (73.9%), moderate intra-model agreement (43.1%), highest reasoning coherence (90.6%)
-#    - **Gemma**: Moderate inter-model agreement (69.3%), highest intra-model agreement (49.8%), moderate reasoning coherence (76.4%)
-#    - **GPT-4**: Moderate inter-model agreement (67.9%), lowest intra-model agreement (31.9%), moderate reasoning coherence (76.7%)
-#    - **Bison**: Lowest inter-model agreement (63.7%), lowest intra-model agreement (28.5%), high reasoning coherence (82.4%)
+# 4. **Three-Dimensional Actor Profiles**:
+#    - **Claude**: High inter-actor agreement (69.7%), moderate intra-actor consistency (43.1%), highest reasoning coherence (90.6%)
+#    - **Gemma**: Moderate inter-actor agreement (65.4%), highest intra-actor consistency (49.8%), moderate reasoning coherence (76.4%)
+#    - **GPT-4**: Moderate inter-actor agreement (64.7%), lowest intra-actor consistency (31.9%), moderate reasoning coherence (76.7%)
+#    - **Bison**: Lowest inter-actor agreement (61.3%), low intra-actor consistency (28.5%), high reasoning coherence (82.4%)
+#    - **Human**: Low inter-actor agreement (43.4%), lowest intra-actor consistency (18.4%), perfect reasoning coherence (100%)
 #
-# 5. **Human-LLM Alignment** (Mean: 46.3% ± 2.1%):
-#    - **Bison** shows highest human alignment (49.9% ± 17.4%) - most human-like reasoning
-#    - **Mistral** shows lowest human alignment (44.3% ± 15.0%) - least human-like reasoning
-#    - Range of 5.6% indicates slight variation in human alignment across models
-#    - All models show substantial variability (14.7% - 17.4% std), suggesting context-dependent human alignment
+# 5. **Human-LLM Alignment** (Range: 40.1% - 46.9%):
+#    - **Bison** shows highest human alignment (46.9% ± 16.5%) - most human-like reasoning
+#    - **Mistral** shows lowest human alignment (40.1% ± 13.8%) - least human-like reasoning
+#    - **GPT-4** shows moderate human alignment (45.3% ± 15.7%) - balanced human similarity
+#    - Range of 6.8% indicates moderate variation in human alignment across LLMs
+#    - All LLMs show substantial variability (13.8% - 16.5% std), suggesting context-dependent human alignment
 #
 # ### Practical Implications:
 #
-# - **Most Predictable Ethics**: Gemma (highest internal agreement across scenarios)
+# - **Most Predictable Ethics**: Gemma (highest internal consistency across scenarios)
 # - **Most Coherent Reasoning**: Claude (most consistent across different reasoning approaches)
-# - **Most Diverse Perspectives**: GPT-4 and Bison (high variability in responses)
-# - **Most Human-Like Reasoning**: Bison (highest human alignment at 49.9%)
+# - **Most Diverse Perspectives**: GPT-4 and Human (high variability in responses)
+# - **Most Human-Like Reasoning**: Bison (highest human alignment at 46.9%)
 # - **Best Overall Balance**: Claude (reliable consensus + coherent reasoning + moderate diversity)
 # - **Best for Human Collaboration**: Bison and GPT-4 (highest human alignment scores)
-# - **Most Independent Reasoning**: Mistral and Llama (lowest human alignment, most unique perspectives)
+# - **Most Independent Reasoning**: Mistral and Human (lowest inter-actor alignment, most unique perspectives)
+# - **Most Context-Dependent**: Human responses (lowest internal consistency, suggesting high situational awareness)
 
 # %%

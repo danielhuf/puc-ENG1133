@@ -1,0 +1,282 @@
+[
+  {
+    "Actor_1": "bison",
+    "Actor_2": "claude",
+    "Mean_Similarity": 0.6689842169938564,
+    "Std_Similarity": 0.07997255987545468,
+    "Min_Similarity": 0.3139611482620239,
+    "Max_Similarity": 0.8926289081573486,
+    "Q25": 0.6179942488670349,
+    "Q75": 0.7265625447034836
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "gemma",
+    "Mean_Similarity": 0.6163026867225813,
+    "Std_Similarity": 0.08456172898277459,
+    "Min_Similarity": 0.23102645576000214,
+    "Max_Similarity": 0.8434988260269165,
+    "Q25": 0.5623145997524261,
+    "Q75": 0.6766923367977142
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "gpt3.5",
+    "Mean_Similarity": 0.6452551067079545,
+    "Std_Similarity": 0.08875088186357537,
+    "Min_Similarity": 0.22700408101081848,
+    "Max_Similarity": 0.8916072845458984,
+    "Q25": 0.5880895704030991,
+    "Q75": 0.7090516090393066
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "gpt4",
+    "Mean_Similarity": 0.6634642298166319,
+    "Std_Similarity": 0.10032137043608737,
+    "Min_Similarity": 0.1613205522298813,
+    "Max_Similarity": 0.9324936866760254,
+    "Q25": 0.6006134301424026,
+    "Q75": 0.7353173047304153
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "human",
+    "Mean_Similarity": 0.4686415985850054,
+    "Std_Similarity": 0.16501007082355112,
+    "Min_Similarity": -0.09757129102945328,
+    "Max_Similarity": 0.9133860468864441,
+    "Q25": 0.358777292072773,
+    "Q75": 0.5921114534139633
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.6381565496593014,
+    "Std_Similarity": 0.08043628782764871,
+    "Min_Similarity": 0.31183522939682007,
+    "Max_Similarity": 0.8494837880134583,
+    "Q25": 0.5867756009101868,
+    "Q75": 0.6965673714876175
+  },
+  {
+    "Actor_1": "bison",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.5910574147188506,
+    "Std_Similarity": 0.09315156925679037,
+    "Min_Similarity": 0.08987413346767426,
+    "Max_Similarity": 0.851561963558197,
+    "Q25": 0.5299202501773834,
+    "Q75": 0.6579077988862991
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "gemma",
+    "Mean_Similarity": 0.7485514132486281,
+    "Std_Similarity": 0.06566164985034503,
+    "Min_Similarity": 0.3976387083530426,
+    "Max_Similarity": 0.9414852261543274,
+    "Q25": 0.7078381925821304,
+    "Q75": 0.7947171181440353
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "gpt3.5",
+    "Mean_Similarity": 0.7754801789158343,
+    "Std_Similarity": 0.07247840766462621,
+    "Min_Similarity": 0.40858712792396545,
+    "Max_Similarity": 0.9503828883171082,
+    "Q25": 0.7324225306510925,
+    "Q75": 0.8282613903284073
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "gpt4",
+    "Mean_Similarity": 0.720290672256729,
+    "Std_Similarity": 0.09003475294652688,
+    "Min_Similarity": 0.2781212031841278,
+    "Max_Similarity": 0.9362789988517761,
+    "Q25": 0.6656142175197601,
+    "Q75": 0.7858916521072388
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "human",
+    "Mean_Similarity": 0.44491550222381554,
+    "Std_Similarity": 0.14688366372526185,
+    "Min_Similarity": -0.07102716714143753,
+    "Max_Similarity": 0.8457727432250977,
+    "Q25": 0.34889911860227585,
+    "Q75": 0.5530890375375748
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.7963174267067151,
+    "Std_Similarity": 0.05752283876809882,
+    "Min_Similarity": 0.5092574954032898,
+    "Max_Similarity": 0.9413660764694214,
+    "Q25": 0.762352928519249,
+    "Q75": 0.8372054249048233
+  },
+  {
+    "Actor_1": "claude",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.722833536271583,
+    "Std_Similarity": 0.07291804379014472,
+    "Min_Similarity": 0.17380645871162415,
+    "Max_Similarity": 0.9026279449462891,
+    "Q25": 0.6797060817480087,
+    "Q75": 0.7747592478990555
+  },
+  {
+    "Actor_1": "gemma",
+    "Actor_2": "gpt3.5",
+    "Mean_Similarity": 0.7147694710954436,
+    "Std_Similarity": 0.07575959980466077,
+    "Min_Similarity": 0.234834223985672,
+    "Max_Similarity": 0.9297160506248474,
+    "Q25": 0.6675108820199966,
+    "Q75": 0.7687336951494217
+  },
+  {
+    "Actor_1": "gemma",
+    "Actor_2": "gpt4",
+    "Mean_Similarity": 0.6541846848634048,
+    "Std_Similarity": 0.09104678001254932,
+    "Min_Similarity": 0.2558322846889496,
+    "Max_Similarity": 0.9084927439689636,
+    "Q25": 0.5968579947948456,
+    "Q75": 0.7200341373682022
+  },
+  {
+    "Actor_1": "gemma",
+    "Actor_2": "human",
+    "Mean_Similarity": 0.41465453863831553,
+    "Std_Similarity": 0.13458207313065298,
+    "Min_Similarity": -0.06776273250579834,
+    "Max_Similarity": 0.7959976196289062,
+    "Q25": 0.32655069231987,
+    "Q75": 0.5127357393503189
+  },
+  {
+    "Actor_1": "gemma",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.7407479410742513,
+    "Std_Similarity": 0.06285723223187359,
+    "Min_Similarity": 0.4355815649032593,
+    "Max_Similarity": 0.9153152108192444,
+    "Q25": 0.7012307494878769,
+    "Q75": 0.7848936319351196
+  },
+  {
+    "Actor_1": "gemma",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.6821745188119741,
+    "Std_Similarity": 0.07290996408980614,
+    "Min_Similarity": 0.3009168207645416,
+    "Max_Similarity": 0.8852789998054504,
+    "Q25": 0.6358035355806351,
+    "Q75": 0.7334595173597336
+  },
+  {
+    "Actor_1": "gpt3.5",
+    "Actor_2": "gpt4",
+    "Mean_Similarity": 0.7091644107909328,
+    "Std_Similarity": 0.09375746089533776,
+    "Min_Similarity": 0.2847222089767456,
+    "Max_Similarity": 0.9431942105293274,
+    "Q25": 0.651944562792778,
+    "Q75": 0.7770408093929291
+  },
+  {
+    "Actor_1": "gpt3.5",
+    "Actor_2": "human",
+    "Mean_Similarity": 0.4321268298403315,
+    "Std_Similarity": 0.14671872150913917,
+    "Min_Similarity": -0.1531650573015213,
+    "Max_Similarity": 0.8306260704994202,
+    "Q25": 0.33603276312351227,
+    "Q75": 0.5406384766101837
+  },
+  {
+    "Actor_1": "gpt3.5",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.7467968658635997,
+    "Std_Similarity": 0.0731632928267395,
+    "Min_Similarity": 0.2560158967971802,
+    "Max_Similarity": 0.9299991130828857,
+    "Q25": 0.7034082859754562,
+    "Q75": 0.7996522188186646
+  },
+  {
+    "Actor_1": "gpt3.5",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.6974959607237294,
+    "Std_Similarity": 0.08173071714917998,
+    "Min_Similarity": 0.2789713442325592,
+    "Max_Similarity": 0.905333399772644,
+    "Q25": 0.6481302976608276,
+    "Q75": 0.7559821307659149
+  },
+  {
+    "Actor_1": "gpt4",
+    "Actor_2": "human",
+    "Mean_Similarity": 0.45284720727958044,
+    "Std_Similarity": 0.15667277336366572,
+    "Min_Similarity": -0.09804870933294296,
+    "Max_Similarity": 0.8858928680419922,
+    "Q25": 0.3499835506081581,
+    "Q75": 0.5667700320482254
+  },
+  {
+    "Actor_1": "gpt4",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.679062540390393,
+    "Std_Similarity": 0.09021570944260224,
+    "Min_Similarity": 0.23799395561218262,
+    "Max_Similarity": 0.9180498719215393,
+    "Q25": 0.6229963898658752,
+    "Q75": 0.7445201426744461
+  },
+  {
+    "Actor_1": "gpt4",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.650766594668803,
+    "Std_Similarity": 0.0944342557539192,
+    "Min_Similarity": 0.1473887711763382,
+    "Max_Similarity": 0.9040613174438477,
+    "Q25": 0.5913040637969971,
+    "Q75": 0.7190191298723221
+  },
+  {
+    "Actor_1": "human",
+    "Actor_2": "llama",
+    "Mean_Similarity": 0.42068889307239293,
+    "Std_Similarity": 0.14096725110191774,
+    "Min_Similarity": -0.09295759350061417,
+    "Max_Similarity": 0.8320172429084778,
+    "Q25": 0.32757440209388733,
+    "Q75": 0.5238758474588394
+  },
+  {
+    "Actor_1": "human",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.40102318885011173,
+    "Std_Similarity": 0.13820774553966922,
+    "Min_Similarity": -0.09110093116760254,
+    "Max_Similarity": 0.7826070785522461,
+    "Q25": 0.30917779356241226,
+    "Q75": 0.499890498816967
+  },
+  {
+    "Actor_1": "llama",
+    "Actor_2": "mistral",
+    "Mean_Similarity": 0.7085861695594927,
+    "Std_Similarity": 0.07081681017672516,
+    "Min_Similarity": 0.34328335523605347,
+    "Max_Similarity": 0.896428108215332,
+    "Q25": 0.6657434552907944,
+    "Q75": 0.75863216817379
+  }
+]
