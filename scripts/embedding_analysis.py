@@ -221,8 +221,13 @@ def plot_row_similarity_distribution(row_similarities: Dict):
 
     for i, (pair, similarities) in enumerate(pair_similarities.items()):
         if i < len(axes):
-            axes[i].hist(
-                similarities, bins=30, alpha=0.7, edgecolor="black", color="skyblue"
+            sns.histplot(
+                similarities, 
+                bins=30, 
+                alpha=0.7, 
+                edgecolor="black", 
+                color="skyblue",
+                ax=axes[i]
             )
 
             # Add mean and median lines
@@ -418,17 +423,17 @@ def plot_column_similarity_comparison(column_similarities: Dict):
         figsize=(12, 2.5 * n_models + 3),
         gridspec_kw={"height_ratios": height_ratios},
     )
-    colors = sns.color_palette("husl", n_models)
 
     for i, (model, data) in enumerate(column_similarities.items()):
         ax = axes[i]
-        ax.hist(
+        sns.histplot(
             data["similarities"],
             bins=50,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            density=True,
+            stat="density",
+            ax=ax
         )
 
         mean_sim = data["mean_similarity"]
@@ -457,21 +462,18 @@ def plot_column_similarity_comparison(column_similarities: Dict):
 
     ax_box = axes[-1]
     similarities_data = [data["similarities"] for data in column_similarities.values()]
-
-    box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
-
-    for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
-        patch.set_alpha(0.8)
-
-    ax_box.set_xlabel("Model")
-    ax_box.set_ylabel("Cosine Similarity")
+    
+    box_data = []
+    for i, (model, data) in enumerate(column_similarities.items()):
+        for sim in data["similarities"]:
+            box_data.append({"Model": model, "Similarity": sim})
+    box_df = pd.DataFrame(box_data)
+    
+    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
     ax_box.set_title("Intra-Model Similarity Comparison")
-    ax_box.tick_params(axis="x", rotation=0)
     ax_box.grid(True, alpha=0.3)
 
     plt.tight_layout()
-
     plt.show()
 
 
@@ -630,17 +632,16 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
     if n_models == 1:
         axes = [axes[0], axes[1]]
 
-    colors = sns.color_palette("husl", n_models)
-
     for i, (model, data) in enumerate(reason_similarities.items()):
         ax = axes[i]
-        ax.hist(
+        sns.histplot(
             data["similarities"],
             bins=50,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            density=True,
+            stat="density",
+            ax=ax
         )
 
         mean_sim = data["mean_similarity"]
@@ -671,20 +672,17 @@ def plot_reason_similarity_comparison(reason_similarities: Dict):
     ax_box = axes[-1]
     similarities_data = [data["similarities"] for data in reason_similarities.values()]
 
-    box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
-
-    for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
-        patch.set_alpha(0.8)
-
-    ax_box.set_xlabel("Model")
-    ax_box.set_ylabel("Cosine Similarity")
+    box_data = []
+    for i, (model, data) in enumerate(reason_similarities.items()):
+        for sim in data["similarities"]:
+            box_data.append({"Model": model, "Similarity": sim})
+    box_df = pd.DataFrame(box_data)
+    
+    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
     ax_box.set_title("Reason-wise Similarity Comparison")
-    ax_box.tick_params(axis="x", rotation=0)
     ax_box.grid(True, alpha=0.3)
 
     plt.tight_layout()
-
     plt.show()
 
 
@@ -772,21 +770,18 @@ def cross_analyze_model_similarity(
     plt.figure(figsize=(12, 8))
 
     plot_df = comparison_df.dropna(subset=["Reason_Consistency_Score"])
-    scatter = plt.scatter(
-        plot_df["Intra-Model_Diversity_Score"],
-        plot_df["Inter-Model_Similarity_Score"],
-        s=120,
+    
+    scatter = sns.scatterplot(
+        data=plot_df,
+        x="Intra-Model_Diversity_Score",
+        y="Inter-Model_Similarity_Score",
+        size=120,
         alpha=0.8,
-        c=plot_df["Reason_Consistency_Score"],
-        cmap="viridis",
-        vmin=0.0,
-        vmax=1.0,
-        edgecolors="black",
+        hue="Reason_Consistency_Score",
+        palette="viridis",
+        edgecolor="black",
         linewidth=0.5,
     )
-
-    cbar = plt.colorbar(scatter)
-    cbar.set_label("Reason-wise Consistency Score", rotation=270, labelpad=20)
 
     for i, row in plot_df.iterrows():
         plt.annotate(
@@ -974,18 +969,17 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
     if n_models == 1:
         axes = [axes[0], axes[1]]
 
-    colors = sns.color_palette("husl", n_models)
-
     # Plot individual distributions for each model
     for i, (model, similarities) in enumerate(human_llm_similarities.items()):
         ax = axes[i]
-        ax.hist(
+        sns.histplot(
             similarities,
             bins=50,
             alpha=0.7,
             color="skyblue",
             edgecolor="black",
-            density=True,
+            stat="density",
+            ax=ax
         )
 
         mean_sim = np.mean(similarities)
@@ -1012,24 +1006,22 @@ def plot_human_llm_similarity_comparison(human_llm_similarities: Dict[str, np.nd
         ax.set_xlim(0, 1)
         ax.legend()
 
-    # Box plot comparison at the bottom
     ax_box = axes[-1]
     similarities_data = list(human_llm_similarities.values())
 
-    box_plot = ax_box.boxplot(similarities_data, labels=model_names, patch_artist=True)
-
-    for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
-        patch.set_alpha(0.8)
-
+    box_data = []
+    for i, (model, similarities) in enumerate(human_llm_similarities.items()):
+        for sim in similarities:
+            box_data.append({"Model": model, "Similarity": sim})
+    box_df = pd.DataFrame(box_data)
+    
+    sns.boxplot(data=box_df, x="Model", y="Similarity", ax=ax_box, color="skyblue", alpha=0.8)
     ax_box.set_xlabel("Model")
     ax_box.set_ylabel("Cosine Similarity with Human Responses")
     ax_box.set_title("Human-LLM Similarity Comparison")
-    ax_box.tick_params(axis="x", rotation=0)
     ax_box.grid(True, alpha=0.3)
 
     plt.tight_layout()
-
     plt.show()
 
 
