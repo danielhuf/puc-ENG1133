@@ -12,35 +12,88 @@ from pathlib import Path
 import openai
 import anthropic
 import google.generativeai as genai
+import replicate
+import re
 import json
+import time
 from tqdm import tqdm
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
-def setup_openai():
-    """Setup OpenAI API client."""
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    if not openai.api_key:
-        raise ValueError("Please set your OPENAI_API_KEY environment variable")
+MAX_TOKENS = 2000
+DEFAULT_TEMPERATURE = 0.7
 
 
-def setup_anthropic():
-    """Setup Anthropic API client."""
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    if not anthropic_key:
-        raise ValueError("Please set your ANTHROPIC_API_KEY environment variable")
-    return anthropic.Anthropic(api_key=anthropic_key)
+def setup_llm_provider(provider: str):
+    """
+    Setup LLM provider API client dynamically.
+
+    Args:
+        provider: Provider name ('openai', 'anthropic', 'gemini', 'replicate')
+
+    Returns:
+        Configured client or None for providers that don't return clients
+
+    Raises:
+        ValueError: If required environment variable is not set
+    """
+    provider_configs = {
+        "openai": {
+            "env_var": "OPENAI_API_KEY",
+            "setup_func": lambda: setattr(
+                openai, "api_key", os.getenv("OPENAI_API_KEY")
+            ),
+        },
+        "anthropic": {
+            "env_var": "ANTHROPIC_API_KEY",
+            "setup_func": lambda: anthropic.Anthropic(
+                api_key=os.getenv("ANTHROPIC_API_KEY")
+            ),
+        },
+        "gemini": {
+            "env_var": "GOOGLE_API_KEY",
+            "setup_func": lambda: (
+                genai.configure(api_key=os.getenv("GOOGLE_API_KEY")),
+                genai.GenerativeModel("gemini-2.0-flash-lite"),
+            )[-1],
+        },
+        "replicate": {
+            "env_var": "REPLICATE_API_TOKEN",
+            "setup_func": lambda: setattr(
+                replicate, "api_token", os.getenv("REPLICATE_API_TOKEN")
+            ),
+        },
+    }
+
+    if provider not in provider_configs:
+        raise ValueError(
+            f"Unknown provider: {provider}. Supported providers: {list(provider_configs.keys())}"
+        )
+
+    config = provider_configs[provider]
+    api_key = os.getenv(config["env_var"])
+
+    if not api_key:
+        raise ValueError(f"Please set your {config['env_var']} environment variable")
+
+    return config["setup_func"]()
 
 
-def setup_gemini():
-    """Setup Google Gemini API client."""
-    google_key = os.getenv("GOOGLE_API_KEY")
-    if not google_key:
-        raise ValueError("Please set your GOOGLE_API_KEY environment variable")
-    genai.configure(api_key=google_key)
-    return genai.GenerativeModel("gemini-2.0-flash-lite")
+def setup_all_providers():
+    """Setup all LLM providers at once."""
+    providers = ["openai", "anthropic", "gemini", "replicate"]
+    clients = {}
+
+    for provider in providers:
+        try:
+            client = setup_llm_provider(provider)
+            clients[provider] = client
+        except ValueError as e:
+            print(f"{provider.title()} setup failed: {e}")
+            clients[provider] = None
+
+    return clients
 
 
 def parse_structured_response(response_text: str) -> tuple[str, str]:
@@ -54,6 +107,10 @@ def parse_structured_response(response_text: str) -> tuple[str, str]:
         Tuple of (verdict, reasoning)
     """
     try:
+        if response_text.startswith("ERROR:"):
+            print(f"API Error response: {response_text}")
+            return None, None
+
         cleaned_text = response_text.strip()
 
         if cleaned_text.startswith("```json"):
@@ -67,7 +124,30 @@ def parse_structured_response(response_text: str) -> tuple[str, str]:
 
         cleaned_text = cleaned_text.strip()
 
-        data = json.loads(cleaned_text)
+        try:
+            data = json.loads(cleaned_text)
+        except json.JSONDecodeError:
+
+            reasoning_match = re.search(
+                r'"reasoning":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_text, re.DOTALL
+            )
+            if reasoning_match:
+                original_reasoning = reasoning_match.group(1)
+                escaped_reasoning = (
+                    original_reasoning.replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t")
+                )
+                cleaned_text = cleaned_text.replace(
+                    f'"reasoning": "{original_reasoning}"',
+                    f'"reasoning": "{escaped_reasoning}"',
+                )
+
+            try:
+                data = json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                return extract_verdict_from_text(cleaned_text)
+
         verdict = data.get("verdict", "").upper()
         reasoning = data.get("reasoning", "")
 
@@ -80,7 +160,53 @@ def parse_structured_response(response_text: str) -> tuple[str, str]:
     except json.JSONDecodeError as e:
         print(f"Failed to parse JSON response: {response_text}")
         print(f"JSON Error: {e}")
-        return None, None
+        return extract_verdict_from_text(response_text)
+
+
+def extract_verdict_from_text(text: str) -> tuple[str, str]:
+    """
+    Extract verdict and reasoning from plain text response when JSON parsing fails.
+
+    Args:
+        text: Plain text response from LLM
+
+    Returns:
+        Tuple of (verdict, reasoning)
+    """
+
+    verdict_patterns = [
+        r"\b(YTA|NTA|ESH|NAH|INFO)\b",
+        r"classify.*?as\s+(YTA|NTA|ESH|NAH|INFO)",
+        r"would.*?classify.*?as\s+(YTA|NTA|ESH|NAH|INFO)",
+        r"verdict.*?is\s+(YTA|NTA|ESH|NAH|INFO)",
+    ]
+
+    verdict = None
+    for pattern in verdict_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            verdict = match.group(1).upper()
+            break
+
+    reasoning = text.strip()
+
+    if verdict:
+        reasoning = re.sub(
+            r"^(Based on|Here is my reasoning:|Therefore, I would classify.*?\.)",
+            "",
+            reasoning,
+            flags=re.IGNORECASE,
+        )
+        reasoning = reasoning.strip()
+
+        if len(reasoning) > 1000:
+            reasoning = reasoning[:1000] + "..."
+
+    valid_verdicts = ["YTA", "NTA", "ESH", "NAH", "INFO"]
+    verdict = verdict if verdict in valid_verdicts else None
+    reasoning = reasoning if reasoning and len(reasoning.strip()) >= 5 else None
+
+    return verdict, reasoning
 
 
 def process_pair(
@@ -94,7 +220,6 @@ def process_pair(
     progress_bar,
     pair_name,
     model="gpt-3.5-turbo",
-    temperature=0.7,
 ):
     """
     Process a single pair of columns (label and reason) for a row.
@@ -110,7 +235,6 @@ def process_pair(
         progress_bar: tqdm progress bar
         pair_name: Name for progress tracking
         model: Model to use
-        temperature: Temperature for response generation
 
     Returns:
         None (updates dataframe in place)
@@ -118,12 +242,8 @@ def process_pair(
     if pd.notna(row[label_col]) or pd.notna(row[reason_col]):
         progress_bar.set_postfix(**{pair_name: "skipped"})
     else:
-        if model == "claude":
-            response = prompt_claude(system_message, user_message, temperature)
-        elif model == "gemini":
-            response = prompt_gemini(system_message, user_message, temperature)
-        else:
-            response = prompt_gpt(system_message, user_message, model, temperature)
+        prompt_function = MODEL_FUNCTIONS.get(model, prompt_gpt_wrapper)
+        response = prompt_function(system_message, user_message)
 
         verdict, reasoning = parse_structured_response(response)
         df.at[idx, label_col] = verdict
@@ -141,7 +261,6 @@ def prompt_gpt(
     system_message: str,
     user_message: str,
     model: str = "gpt-3.5-turbo",
-    temperature: float = 0.3,
 ) -> str:
     """
     Send prompt to GPT model and return the response.
@@ -150,12 +269,12 @@ def prompt_gpt(
         system_message: System prompt for the model
         user_message: User message (selftext)
         model: Model to use (gpt-3.5-turbo or gpt-4o-mini)
-        temperature: Temperature for response generation (0.0-2.0)
 
     Returns:
         Response from the specified GPT model
     """
     try:
+        setup_llm_provider("openai")
         client = openai.OpenAI()
         response = client.chat.completions.create(
             model=model,
@@ -163,8 +282,8 @@ def prompt_gpt(
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=2000,
-            temperature=temperature,
+            max_tokens=MAX_TOKENS,
+            temperature=DEFAULT_TEMPERATURE,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -175,7 +294,6 @@ def prompt_gpt(
 def prompt_claude(
     system_message: str,
     user_message: str,
-    temperature: float = 0.3,
 ) -> str:
     """
     Send prompt to Claude Haiku 3 and return the response.
@@ -183,17 +301,16 @@ def prompt_claude(
     Args:
         system_message: System prompt for the model
         user_message: User message (selftext)
-        temperature: Temperature for response generation (0.0-1.0)
 
     Returns:
         Response from Claude Haiku 3
     """
     try:
-        client = setup_anthropic()
+        client = setup_llm_provider("anthropic")
         response = client.messages.create(
             model="claude-3-haiku-20240307",
-            max_tokens=2000,
-            temperature=temperature,
+            max_tokens=MAX_TOKENS,
+            temperature=DEFAULT_TEMPERATURE,
             system=system_message,
             messages=[{"role": "user", "content": user_message}],
         )
@@ -206,7 +323,6 @@ def prompt_claude(
 def prompt_gemini(
     system_message: str,
     user_message: str,
-    temperature: float = 0.3,
 ) -> str:
     """
     Send prompt to Gemini 2.0 Flash Lite and return the response.
@@ -214,25 +330,94 @@ def prompt_gemini(
     Args:
         system_message: System prompt for the model
         user_message: User message (selftext)
-        temperature: Temperature for response generation (0.0-1.0)
 
     Returns:
         Response from Gemini 2.0 Flash Lite
     """
     try:
-        model = setup_gemini()
+        model = setup_llm_provider("gemini")
         prompt = f"{system_message}\n\n{user_message}"
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=2000,
+                temperature=DEFAULT_TEMPERATURE,
+                max_output_tokens=MAX_TOKENS,
             ),
         )
         return response.text.strip()
     except Exception as e:
         print(f"Error calling Google Gemini API: {e}")
         return "ERROR: API call failed"
+
+
+def prompt_llama(
+    system_message: str,
+    user_message: str,
+    max_retries: int = 3,
+) -> str:
+    """
+    Send prompt to Llama 2 7B Chat via Replicate and return the response.
+
+    Args:
+        system_message: System prompt for the model
+        user_message: User message (selftext)
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Response from Llama 2 7B Chat
+    """
+    setup_llm_provider("replicate")
+
+    for attempt in range(max_retries):
+        try:
+            response_text = ""
+            for event in replicate.stream(
+                "meta/llama-2-7b-chat",
+                input={
+                    "top_p": 1,
+                    "prompt": user_message,
+                    "temperature": DEFAULT_TEMPERATURE,
+                    "system_prompt": system_message,
+                    "length_penalty": 1,
+                    "max_new_tokens": MAX_TOKENS,
+                    "prompt_template": "<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{prompt} [/INST]",
+                    "presence_penalty": 0,
+                    "log_performance_metrics": False,
+                },
+            ):
+                response_text += str(event)
+
+            return response_text.strip()
+
+        except Exception as e:
+            print(
+                f"Error calling Replicate Llama API (attempt {attempt + 1}/{max_retries}): {e}"
+            )
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 3
+                print(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                print("All retry attempts failed")
+                return "ERROR: API call failed"
+
+
+def prompt_gpt_wrapper(model_name: str):
+    """Create a wrapper for GPT models to match other model signatures."""
+
+    def wrapper(system_message: str, user_message: str) -> str:
+        return prompt_gpt(system_message, user_message, model_name)
+
+    return wrapper
+
+
+MODEL_FUNCTIONS = {
+    "gpt-3.5-turbo": prompt_gpt_wrapper("gpt-3.5-turbo"),
+    "gpt-4o-mini": prompt_gpt_wrapper("gpt-4o-mini"),
+    "claude": prompt_claude,
+    "gemini": prompt_gemini,
+    "llama": prompt_llama,
+}
 
 
 def add_column_if_not_exists(df: pd.DataFrame, column_name: str) -> None:
@@ -390,6 +575,10 @@ def process_dataset(language_code: str) -> None:
         "gemini_reason_1",
         "gemini_label_2",
         "gemini_reason_2",
+        "llama_label_1",
+        "llama_reason_1",
+        "llama_label_2",
+        "llama_reason_2",
     ]
 
     for column in columns_to_add:
@@ -416,7 +605,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gpt3.5_pair1",
             "gpt-3.5-turbo",
-            0.7,
         )
 
         process_pair(
@@ -430,7 +618,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gpt3.5_pair2",
             "gpt-3.5-turbo",
-            0.7,
         )
 
         process_pair(
@@ -444,7 +631,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gpt4_pair1",
             "gpt-4o-mini",
-            0.7,
         )
 
         process_pair(
@@ -458,7 +644,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gpt4_pair2",
             "gpt-4o-mini",
-            0.7,
         )
 
         process_pair(
@@ -472,7 +657,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "claude_pair1",
             "claude",
-            0.7,
         )
 
         process_pair(
@@ -486,7 +670,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "claude_pair2",
             "claude",
-            0.7,
         )
 
         process_pair(
@@ -500,7 +683,6 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gemini_pair1",
             "gemini",
-            0.7,
         )
 
         process_pair(
@@ -514,7 +696,32 @@ def process_dataset(language_code: str) -> None:
             progress_bar,
             "gemini_pair2",
             "gemini",
-            0.7,
+        )
+
+        process_pair(
+            df,
+            idx,
+            row,
+            system_message,
+            user_message,
+            "llama_label_1",
+            "llama_reason_1",
+            progress_bar,
+            "llama_pair1",
+            "llama",
+        )
+
+        process_pair(
+            df,
+            idx,
+            row,
+            system_message,
+            user_message,
+            "llama_label_2",
+            "llama_reason_2",
+            progress_bar,
+            "llama_pair2",
+            "llama",
         )
 
         df.to_csv(file_path, index=False)
@@ -525,10 +732,6 @@ def process_dataset(language_code: str) -> None:
 def main() -> None:
     script_dir = Path(__file__).parent
     os.chdir(script_dir.parent)
-
-    setup_openai()
-    setup_anthropic()
-    setup_gemini()
 
     language_configs = ["br", "de", "es", "fr"]
 
