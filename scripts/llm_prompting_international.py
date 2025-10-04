@@ -14,6 +14,7 @@ import pandas as pd
 import openai
 import anthropic
 import google.generativeai as genai
+import replicate
 import re
 import json
 from tqdm import tqdm
@@ -35,8 +36,8 @@ class Config:
         "gpt-4o-mini": {"provider": "openai", "model": "gpt-4o-mini"},
         "claude": {"provider": "anthropic", "model": "claude-3-haiku-20240307"},
         "gemini": {"provider": "gemini", "model": "gemini-2.0-flash-lite"},
-        "llama-local": {"provider": "ollama", "model": "llama2:7b"},
-        "mistral-local": {"provider": "ollama", "model": "mistral:7b"},
+        "llama": {"provider": "replicate", "model": "meta/llama-2-7b-chat"},
+        "mistral": {"provider": "replicate", "model": "mistralai/mistral-7b-v0.1"},
     }
 
     COLUMN_PAIRS = [
@@ -48,10 +49,10 @@ class Config:
         ("claude_label_2", "claude_reason_2"),
         ("gemini_label_1", "gemini_reason_1"),
         ("gemini_label_2", "gemini_reason_2"),
-        ("llama_local_label_1", "llama_local_reason_1"),
-        ("llama_local_label_2", "llama_local_reason_2"),
-        ("mistral_local_label_1", "mistral_local_reason_1"),
-        ("mistral_local_label_2", "mistral_local_reason_2"),
+        ("llama_label_1", "llama_reason_1"),
+        ("llama_label_2", "llama_reason_2"),
+        ("mistral_label_1", "mistral_reason_1"),
+        ("mistral_label_2", "mistral_reason_2"),
     ]
 
     MODEL_COLUMN_MAPPING = {
@@ -71,13 +72,13 @@ class Config:
             ("gemini_label_1", "gemini_reason_1"),
             ("gemini_label_2", "gemini_reason_2"),
         ],
-        "llama-local": [
-            ("llama_local_label_1", "llama_local_reason_1"),
-            ("llama_local_label_2", "llama_local_reason_2"),
+        "llama": [
+            ("llama_label_1", "llama_reason_1"),
+            ("llama_label_2", "llama_reason_2"),
         ],
-        "mistral-local": [
-            ("mistral_local_label_1", "mistral_local_reason_1"),
-            ("mistral_local_label_2", "mistral_local_reason_2"),
+        "mistral": [
+            ("mistral_label_1", "mistral_reason_1"),
+            ("mistral_label_2", "mistral_reason_2"),
         ],
     }
 
@@ -150,9 +151,11 @@ def setup_llm_provider(provider: str) -> Union[Any, None]:
                 genai.GenerativeModel("gemini-2.0-flash-lite"),
             )[-1],
         },
-        "ollama": {
-            "env_var": None,
-            "setup_func": lambda: None,
+        "replicate": {
+            "env_var": "REPLICATE_API_TOKEN",
+            "setup_func": lambda: setattr(
+                replicate, "api_token", os.getenv("REPLICATE_API_TOKEN")
+            ),
         },
     }
 
@@ -174,7 +177,7 @@ def setup_llm_provider(provider: str) -> Union[Any, None]:
 
 def setup_all_providers() -> Dict[str, Optional[Any]]:
     """Setup all LLM providers at once."""
-    providers = ["openai", "anthropic", "gemini", "ollama"]
+    providers = ["openai", "anthropic", "gemini", "replicate"]
     clients = {}
 
     for provider in providers:
@@ -464,56 +467,44 @@ def create_gpt_prompt_function(model_name: str) -> Callable[[str, str], str]:
     return wrapper
 
 
-def prompt_ollama(
-    system_message: str, user_message: str, model: str = "llama2:7b"
-) -> str:
+def prompt_replicate(system_message: str, user_message: str, model: str) -> str:
     """
-    Send prompt to Ollama local model and return the response.
+    Send prompt to Replicate model and return the response.
 
     Args:
         system_message: System prompt for the model
         user_message: User message (selftext)
-        model: Model to use (e.g., "llama2:7b", "mistral:7b")
+        model: Model to use (e.g., "meta/llama-2-7b-chat", "mistralai/mistral-7b-v0.1")
 
     Returns:
-        Response from the specified Ollama model
+        Response from the specified Replicate model
 
     Raises:
         APIError: If API call fails
     """
     try:
-        import requests
+        setup_llm_provider("replicate")
 
-        # Check if Ollama is running
-        try:
-            health_check = requests.get("http://localhost:11434/api/tags", timeout=5)
-            if health_check.status_code != 200:
-                raise APIError("Ollama service is not responding properly")
-        except requests.exceptions.ConnectionError:
-            raise APIError("Ollama is not running. Please start Ollama first with: ollama serve")
+        combined_prompt = f"{system_message}\n\n{user_message}"
 
-        url = "http://localhost:11434/api/generate"
-        payload = {
-            "model": model,
-            "prompt": f"{system_message}\n\n{user_message}",
-            "stream": False,
-            "options": {
-                "num_predict": Config.MAX_TOKENS,
+        output = replicate.run(
+            model,
+            input={
+                "prompt": combined_prompt,
                 "temperature": Config.DEFAULT_TEMPERATURE,
+                "max_new_tokens": Config.MAX_TOKENS,
             },
-        }
+        )
 
-        print(f"🔄 Sending request to Ollama model: {model}")
-        response = requests.post(url, json=payload, timeout=300)  # Increased to 5 minutes
-        response.raise_for_status()
+        response_text = ""
+        for chunk in output:
+            response_text += str(chunk)
 
-        result = response.json()["response"].strip()
-        print(f"✅ Received response from {model} ({len(result)} characters)")
+        result = response_text.strip()
         return result
-    except requests.exceptions.Timeout:
-        raise APIError(f"Ollama timeout: Model {model} took longer than 5 minutes to respond")
+
     except Exception as e:
-        raise APIError(f"Error calling Ollama API: {e}")
+        raise APIError(f"Error calling Replicate API: {e}")
 
 
 MODEL_FUNCTIONS: Dict[str, Callable[[str, str], str]] = {
@@ -521,8 +512,8 @@ MODEL_FUNCTIONS: Dict[str, Callable[[str, str], str]] = {
     "gpt-4o-mini": create_gpt_prompt_function("gpt-4o-mini"),
     "claude": prompt_claude,
     "gemini": prompt_gemini,
-    "llama-local": lambda sys, user: prompt_ollama(sys, user, "llama2:7b"),
-    "mistral-local": lambda sys, user: prompt_ollama(sys, user, "mistral:7b"),
+    "llama": lambda sys, user: prompt_replicate(sys, user, "meta/llama-2-7b-chat"),
+    "mistral": lambda sys, user: prompt_replicate(sys, user, "mistralai/mistral-7b-v0.1"),
 }
 
 
@@ -704,7 +695,7 @@ def main() -> None:
     script_dir = Path(__file__).parent
     os.chdir(script_dir.parent)
 
-    models_to_run = ["llama-local"]
+    models_to_run = ["mistral"]
     max_rows = 2
 
     for language_code in Config.SUPPORTED_LANGUAGES:
