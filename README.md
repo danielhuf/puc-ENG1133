@@ -16,8 +16,8 @@ The study evaluates 7 different LLMs (GPT-3.5, GPT-4, Claude, PaLM 2 Bison, Llam
 - Removes unnecessary columns from the raw dataset
 - Filters out rows with missing reasoning responses
 
-**Input**: `data/normative_evaluation_everyday_dilemmas_dataset.csv`  
-**Output**: `data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv`
+**Input**: `data/ethical_dilemmas.csv`  
+**Output**: `data/ethical_dilemmas_cleaned.csv`
 
 ### 2. `scripts/generate_embeddings.py`
 
@@ -30,8 +30,8 @@ The study evaluates 7 different LLMs (GPT-3.5, GPT-4, Claude, PaLM 2 Bison, Llam
   - Top comments (`top_comment`)
   - LLM reasoning outputs for each model (e.g., `gpt3.5_reason_1`, `claude_reason_2`, etc.)
 
-**Input**: `data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv`  
-**Output**: `data/embeddings_sentence_transformers.csv` (1.5GB file with embeddings)
+**Input**: `data/ethical_dilemmas_cleaned.csv`  
+**Output**: `data/embeddings.csv` (1.5GB file with embeddings)
 
 ### 3. `scripts/embedding_analysis.py`
 

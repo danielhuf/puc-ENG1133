@@ -107,7 +107,7 @@ def create_dataset_file(
     )
 
     # Save the dataset
-    filename = f"data/dataset_cleaned_{language_code}.csv"
+    filename = f"data/ethical_dilemmas_cleaned_{language_code}.csv"
     dataset.to_csv(filename, index=False)
     print(f"Created dataset file: {filename} with {len(dataset)} rows")
 

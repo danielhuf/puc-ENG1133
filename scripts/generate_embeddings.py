@@ -18,7 +18,7 @@ def main() -> None:
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
     print("Reading CSV file...")
-    df = pd.read_csv("data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv")
+    df = pd.read_csv("data/ethical_dilemmas_cleaned.csv")
 
     columns_to_embed = [
         "selftext",
@@ -47,7 +47,7 @@ def main() -> None:
         "llama_reason_3",
     ]
 
-    checkpoint_file = "data/embeddings_sentence_transformers_checkpoint.csv"
+    checkpoint_file = "data/embeddings_checkpoint.csv"
     if os.path.exists(checkpoint_file):
         print("Found checkpoint file. Loading previous progress...")
         embeddings_df = pd.read_csv(checkpoint_file)
@@ -82,9 +82,9 @@ def main() -> None:
             print(f"Checkpoint saved.")
 
     print("All columns processed.")
-    embeddings_df.to_csv("data/embeddings_sentence_transformers.csv", index=False)
+    embeddings_df.to_csv("data/embeddings.csv", index=False)
     print(
-        "Sentence Transformers embeddings saved to 'data/embeddings_sentence_transformers.csv'"
+        "Sentence Transformers embeddings saved to 'data/embeddings.csv'"
     )
 
 

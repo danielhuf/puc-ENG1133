@@ -54,7 +54,7 @@ def load_embeddings(embeddings_file: str) -> Tuple[pd.DataFrame, Dict[str, np.nd
     return df, embeddings_dict
 
 
-df, embeddings_dict = load_embeddings("../data/embeddings_sentence_transformers.csv")
+df, embeddings_dict = load_embeddings("../data/embeddings.csv")
 
 # %% Identify actors and reason types
 actors = set()
@@ -331,7 +331,7 @@ def display_edge_llm_human_similarities(row_similarities: Dict, embeddings_dict:
     """Display the top 5 answers with highest and lowest LLM-Human similarity."""
 
     df_cleaned = pd.read_csv(
-        "../data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv"
+        "../data/ethical_dilemmas_cleaned.csv"
     )
 
     llm_human_similarities = []
@@ -640,7 +640,7 @@ def display_edge_scenario_similarities(
 
     try:
         df_cleaned = pd.read_csv(
-            "../data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv",
+            "../data/ethical_dilemmas_cleaned.csv",
             low_memory=True,
             encoding="utf-8",
             dtype={
@@ -662,7 +662,7 @@ def display_edge_scenario_similarities(
         chunk_list = []
         chunk_size = 2000
         for chunk in pd.read_csv(
-            "../data/normative_evaluation_everyday_dilemmas_dataset_cleaned.csv",
+            "../data/ethical_dilemmas_cleaned.csv",
             chunksize=chunk_size,
             usecols=required_cols,
             encoding="utf-8",

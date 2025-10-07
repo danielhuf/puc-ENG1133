@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Callable, Any
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["GRPC_ALTS_UNTRUSTED"] = "true"
 warnings.filterwarnings("ignore", category=UserWarning)
 logging.getLogger("google").setLevel(logging.ERROR)
 
@@ -99,7 +100,6 @@ class ProcessingConfig:
 
     language_code: str
     models_to_run: List[str]
-    max_rows: Optional[int] = None
     output_file: Optional[str] = None
 
     def __post_init__(self):
@@ -107,7 +107,7 @@ class ProcessingConfig:
             raise ValueError(f"Unsupported language: {self.language_code}")
 
         if not self.output_file:
-            self.output_file = f"data/dataset_cleaned_{self.language_code}.csv"
+            self.output_file = f"data/ethical_dilemmas_cleaned_{self.language_code}.csv"
 
 
 class LLMError(Exception):
@@ -604,7 +604,7 @@ def load_dataset(language_code: str) -> pd.DataFrame:
     Raises:
         FileNotFoundError: If dataset file is not found
     """
-    file_path = f"data/dataset_cleaned_{language_code}.csv"
+    file_path = f"data/ethical_dilemmas_cleaned_{language_code}.csv"
     try:
         return pd.read_csv(file_path)
     except FileNotFoundError:
@@ -677,11 +677,9 @@ def process_dataset(config: ProcessingConfig) -> None:
 
         system_message = get_system_message(config.language_code)
 
-        rows_to_process = df.head(config.max_rows) if config.max_rows else df
-
         progress_bar = tqdm(
-            rows_to_process.iterrows(),
-            total=len(rows_to_process),
+            df.iterrows(),
+            total=len(df),
             desc=f"Processing {config.language_code.upper()}",
         )
 
@@ -712,15 +710,13 @@ def main() -> None:
     script_dir = Path(__file__).parent
     os.chdir(script_dir.parent)
 
-    models_to_run = ["gemma"]
-    max_rows = 2
+    models_to_run = ["gpt-3.5-turbo", "gpt-4o-mini", "claude", "gemini"]
 
     for language_code in Config.SUPPORTED_LANGUAGES:
         try:
             config = ProcessingConfig(
                 language_code=language_code,
                 models_to_run=models_to_run,
-                max_rows=max_rows,
             )
             process_dataset(config)
         except Exception as e:
