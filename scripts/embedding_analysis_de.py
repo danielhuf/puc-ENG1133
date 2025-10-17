@@ -23,6 +23,10 @@ from embedding_utils import (
     plot_row_similarity_distribution,
     summarize_row_characteristics,
     display_edge_llm_human_similarities,
+    analyze_column_similarities,
+    plot_column_similarity_comparison,
+    summarize_column_characteristics,
+    display_edge_scenario_similarities,
 )
 
 plt.rcParams["figure.max_open_warning"] = 0
@@ -79,3 +83,29 @@ print(
 # %% Display LLM-Human similarity edge cases
 df_cleaned = pd.read_csv("../data/ethical_dilemmas_cleaned_de.csv")
 display_edge_llm_human_similarities(row_similarities, df_cleaned)
+
+# %% [markdown]
+# ## 2. Actor-wise Analysis
+#
+# This analysis compares how a same actor responds to different ethical dilemmas.
+# For each actor, we calculate the similarity between all pairs of scenarios.
+
+# %% Actor-wise similarity analysis
+column_similarities = analyze_column_similarities(embeddings_dict, actors, reason_types)
+
+# %% Visualize actor-wise similarities
+plot_column_similarity_comparison(column_similarities)
+
+# %% Statistical summary of actor-wise differences
+column_summary_df = summarize_column_characteristics(column_similarities)
+
+# %% Save column-wise analysis results
+column_summary_dict = column_summary_df.to_dict("records")
+with open(results_dir / "actor_wise_analysis_results.json", "w") as f:
+    json.dump(column_summary_dict, f, indent=2)
+print(
+    f"Actor-wise analysis results saved to {results_dir / 'actor_wise_analysis_results.json'}"
+)
+
+# %% Display scenario similarity edge cases
+display_edge_scenario_similarities(embeddings_dict, actors, reason_types, df_cleaned)

@@ -390,3 +390,422 @@ def display_edge_llm_human_similarities(
         print(f"   {llm_model.upper()} Reasoning: {llm_reason}")
 
     return
+
+
+def analyze_column_similarities(
+    embeddings_dict: Dict[str, np.ndarray],
+    actors: List[str],
+    reason_types: List[str],
+) -> Dict:
+    """Analyze intra-actor similarity across different ethical scenarios.
+
+    This function measures how consistent each actor is when responding to different
+    ethical dilemmas. It calculates the similarity between all pairs of scenarios for
+    each actor.
+
+    The analysis averages all available reasoning approaches (reason_1, reason_2, etc.)
+    per scenario, then computes similarities between these aggregated representations
+    across all scenario pairs.
+
+    Args:
+        embeddings_dict: Dictionary mapping column names to embedding arrays
+        actors: List of actor names to analyze
+        reason_types: List of available reasoning types to aggregate
+
+    Returns:
+        Dictionary with structure:
+        {
+            'actor_name': {
+                'similarities': numpy_array_of_all_pairwise_similarities,
+                'mean_similarity': average_similarity_score,
+                'std_similarity': variability_in_similarity
+            }
+        }
+
+    1. For each actor, aggregate all reasoning types per scenario (mean embedding)
+    2. Compute cosine similarity matrix between all aggregated scenario pairs
+    3. Extract upper triangle to get unique pairwise similarities
+    4. Calculate statistics on the resulting similarity distribution
+    """
+
+    actor_similarities = {}
+
+    for actor in actors:
+        available_reasons = []
+        actor_embeddings = {}
+
+        if actor == "human":
+            if "top_comment_embedding" in embeddings_dict:
+                available_reasons.append("top_comment")
+                actor_embeddings["top_comment"] = embeddings_dict[
+                    "top_comment_embedding"
+                ]
+        else:
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name in embeddings_dict:
+                    available_reasons.append(reason_type)
+                    actor_embeddings[reason_type] = embeddings_dict[col_name]
+
+        if not available_reasons:
+            continue
+
+        all_reason_embeddings = []
+        for reason in available_reasons:
+            embeddings = actor_embeddings[reason]
+            all_reason_embeddings.append(embeddings)
+
+        mean_embeddings = np.mean(all_reason_embeddings, axis=0)
+
+        mean_embeddings_norm = normalize(mean_embeddings, norm="l2")
+
+        similarity_matrix = cosine_similarity(mean_embeddings_norm)
+
+        upper_triangle = np.triu(similarity_matrix, k=1)
+        similarities = upper_triangle[upper_triangle != 0]
+
+        actor_similarities[actor] = {
+            "similarities": similarities,
+            "mean_similarity": np.mean(similarities),
+            "std_similarity": np.std(similarities),
+        }
+
+    return actor_similarities
+
+
+def plot_column_similarity_comparison(column_similarities: Dict):
+    """Compare intra-actor similarity distributions."""
+
+    actor_names = list(column_similarities.keys())
+    n_actors = len(actor_names)
+
+    height_ratios = [2.5] * n_actors + [3]
+
+    _, axes = plt.subplots(
+        n_actors + 1,
+        1,
+        figsize=(12, 2.5 * n_actors + 3),
+        gridspec_kw={"height_ratios": height_ratios},
+    )
+
+    for i, (actor, data) in enumerate(
+        tqdm(column_similarities.items(), desc="Plotting histograms")
+    ):
+        ax = axes[i]
+        ax.hist(
+            data["similarities"],
+            bins=30,
+            alpha=0.7,
+            color="skyblue",
+            edgecolor="black",
+            density=True,
+        )
+
+        mean_sim = data["mean_similarity"]
+        median_sim = np.median(data["similarities"])
+        ax.set_title(f"{actor.upper()}")
+        ax.set_xlabel("Cosine Similarity")
+        ax.set_ylabel("Density")
+        ax.grid(True, alpha=0.3)
+
+        ax.axvline(
+            mean_sim,
+            color="red",
+            linestyle="--",
+            alpha=0.8,
+            label=f"Mean: {mean_sim:.3f}",
+        )
+        ax.axvline(
+            median_sim,
+            color="blue",
+            linestyle="-",
+            alpha=0.8,
+            label=f"Median: {median_sim:.3f}",
+        )
+        ax.set_xlim(0, 1)
+        ax.legend()
+
+    ax_box = axes[-1]
+
+    similarities_data = [data["similarities"] for data in column_similarities.values()]
+    actor_names = list(column_similarities.keys())
+
+    box_plot = ax_box.boxplot(
+        similarities_data, tick_labels=actor_names, patch_artist=True
+    )
+
+    for patch in box_plot["boxes"]:
+        patch.set_facecolor("skyblue")
+        patch.set_alpha(0.8)
+    ax_box.set_title("Intra-Actor Similarity Comparison")
+    ax_box.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def summarize_column_characteristics(column_similarities: Dict):
+    """Provide statistical summary of each actor's characteristics."""
+
+    print(f"=== ACTOR-WISE SIMILARITY SUMMARY ===\n")
+
+    summary_data = []
+    for actor, data in column_similarities.items():
+        summary_data.append(
+            {
+                "Actor": actor,
+                "Mean Similarity": data["mean_similarity"],
+                "Std Similarity": data["std_similarity"],
+                "Min Similarity": np.min(data["similarities"]),
+                "Max Similarity": np.max(data["similarities"]),
+                "Q25": np.percentile(data["similarities"], 25),
+                "Q75": np.percentile(data["similarities"], 75),
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_data).sort_values("Actor")
+
+    print(summary_df.round(4))
+
+    return summary_df
+
+
+def display_edge_scenario_similarities(
+    embeddings_dict: Dict[str, np.ndarray],
+    actors: List[str],
+    reason_types: List[str],
+    df_cleaned: pd.DataFrame,
+):
+    """Display the top 5 answers with highest and lowest scenario similarity for both humans and LLMs."""
+
+    actor_scenario_similarities = {}
+
+    for actor_idx, actor in enumerate(actors, 1):
+        print(f"Processing actor {actor_idx}/{len(actors)}: {actor}")
+        available_reasons = []
+        actor_embeddings = {}
+
+        if actor == "human":
+            if "top_comment_embedding" in embeddings_dict:
+                available_reasons.append("top_comment")
+                actor_embeddings["top_comment"] = embeddings_dict[
+                    "top_comment_embedding"
+                ]
+        else:
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name in embeddings_dict:
+                    available_reasons.append(reason_type)
+                    actor_embeddings[reason_type] = embeddings_dict[col_name]
+
+        if not available_reasons:
+            continue
+
+        all_reason_embeddings = []
+        for reason in available_reasons:
+            embeddings = actor_embeddings[reason]
+            all_reason_embeddings.append(embeddings)
+
+        mean_embeddings = np.mean(all_reason_embeddings, axis=0)
+        mean_embeddings_norm = normalize(mean_embeddings, norm="l2")
+
+        n_scenarios = mean_embeddings_norm.shape[0]
+
+        lowest_pairs = [(float("inf"), -1, -1)] * 5
+        highest_pairs = [(float("-inf"), -1, -1)] * 5
+
+        chunk_size = 500
+
+        for i in range(0, n_scenarios, chunk_size):
+            end_i = min(i + chunk_size, n_scenarios)
+            chunk_embeddings = mean_embeddings_norm[i:end_i]
+
+            chunk_similarities = cosine_similarity(
+                chunk_embeddings, mean_embeddings_norm
+            )
+
+            for local_i, global_i in enumerate(range(i, end_i)):
+                for j in range(global_i + 1, n_scenarios):
+                    similarity = chunk_similarities[local_i, j]
+
+                    if similarity < lowest_pairs[-1][0]:
+                        lowest_pairs[-1] = (similarity, global_i, j)
+                        lowest_pairs.sort(key=lambda x: x[0])
+
+                    if similarity > highest_pairs[-1][0]:
+                        highest_pairs[-1] = (similarity, global_i, j)
+                        highest_pairs.sort(key=lambda x: x[0], reverse=True)
+
+        lowest_pairs = [pair for pair in lowest_pairs if pair[1] != -1]
+        highest_pairs = [pair for pair in highest_pairs if pair[1] != -1]
+
+        lowest_pairs.sort(key=lambda x: x[0])
+        highest_pairs.sort(key=lambda x: x[0])
+
+        actor_scenario_similarities[actor] = {
+            "lowest": lowest_pairs,
+            "highest": highest_pairs,
+        }
+
+    human_data = actor_scenario_similarities.get("human", {"lowest": [], "highest": []})
+    human_lowest_5 = human_data["lowest"]
+    human_highest_5 = human_data["highest"]
+
+    all_llm_lowest = []
+    all_llm_highest = []
+
+    for actor in actors:
+        if actor != "human":
+            actor_data = actor_scenario_similarities.get(
+                actor, {"lowest": [], "highest": []}
+            )
+            for case in actor_data["lowest"]:
+                all_llm_lowest.append((actor, case))
+            for case in actor_data["highest"]:
+                all_llm_highest.append((actor, case))
+
+    all_llm_lowest.sort(key=lambda x: x[1][0])
+    all_llm_highest.sort(key=lambda x: x[1][0], reverse=True)
+
+    llm_lowest_5 = all_llm_lowest[:5]
+    llm_highest_5 = all_llm_highest[:5]
+
+    print("=" * 100)
+    print("EDGE SCENARIO SIMILARITY CASES")
+    print("=" * 100)
+
+    print("\n👥 HUMAN RESPONSES")
+    print("=" * 60)
+
+    print("\nTOP 5 LOWEST SIMILARITY CASES (Most semantically different answers)")
+    print("-" * 60)
+
+    for i, case in enumerate(human_lowest_5, 1):
+        similarity, idx1, idx2 = case
+
+        scenario1 = df_cleaned.iloc[idx1]
+        scenario2 = df_cleaned.iloc[idx2]
+
+        title1 = scenario1["title"]
+        title2 = scenario2["title"]
+
+        comment1 = scenario1["top_comment"]
+        comment2 = scenario2["top_comment"]
+
+        print(f"\n{i}. Similarity: {similarity:.4f}")
+        print(f"   Scenario 1 (ID: {scenario1['submission_id']}): {title1}")
+        print(f"   Human Comment 1: {comment1}")
+        print(f"   Scenario 2 (ID: {scenario2['submission_id']}): {title2}")
+        print(f"   Human Comment 2: {comment2}")
+
+    print("\nTOP 5 HIGHEST SIMILARITY CASES (Most semantically similar answers)")
+    print("-" * 60)
+
+    for i, case in enumerate(human_highest_5, 1):
+        similarity, idx1, idx2 = case
+
+        scenario1 = df_cleaned.iloc[idx1]
+        scenario2 = df_cleaned.iloc[idx2]
+
+        title1 = scenario1["title"]
+        title2 = scenario2["title"]
+
+        comment1 = scenario1["top_comment"]
+        comment2 = scenario2["top_comment"]
+
+        print(f"\n{i}. Similarity: {similarity:.4f}")
+        print(f"   Scenario 1 (ID: {scenario1['submission_id']}): {title1}")
+        print(f"   Human Comment 1: {comment1}")
+        print(f"   Scenario 2 (ID: {scenario2['submission_id']}): {title2}")
+        print(f"   Human Comment 2: {comment2}")
+
+    print("\n🤖 LLM RESPONSES")
+    print("=" * 60)
+
+    print("\nTOP 5 LOWEST SIMILARITY CASES (Most semantically different answers)")
+    print("-" * 60)
+
+    for i, (actor, case) in enumerate(llm_lowest_5, 1):
+        similarity, idx1, idx2 = case
+
+        scenario1 = df_cleaned.iloc[idx1]
+        scenario2 = df_cleaned.iloc[idx2]
+
+        title1 = scenario1["title"]
+        title2 = scenario2["title"]
+
+        print(f"\n{i}. Similarity: {similarity:.4f} | Model: {actor.upper()}")
+        print(f"   Scenario 1 (ID: {scenario1['submission_id']}): {title1}")
+        print(f"   Scenario 2 (ID: {scenario2['submission_id']}): {title2}")
+
+        llm_reason1 = None
+        llm_reason2 = None
+        for reason_col in [
+            f"{actor}_reason_1",
+            f"{actor}_reason_2",
+            f"{actor}_reason_3",
+        ]:
+            if (
+                reason_col in scenario1
+                and pd.notna(scenario1[reason_col])
+                and llm_reason1 is None
+            ):
+                llm_reason1 = scenario1[reason_col]
+            if (
+                reason_col in scenario2
+                and pd.notna(scenario2[reason_col])
+                and llm_reason2 is None
+            ):
+                llm_reason2 = scenario2[reason_col]
+
+        reason1_preview = llm_reason1
+        reason2_preview = llm_reason2
+
+        print(f"   {actor.upper()} Reasoning:")
+        print(f"     Scenario 1: {reason1_preview}")
+        print(f"     Scenario 2: {reason2_preview}")
+
+    print("\nTOP 5 HIGHEST SIMILARITY CASES (Most semantically similar answers)")
+    print("-" * 60)
+
+    for i, (actor, case) in enumerate(llm_highest_5, 1):
+        similarity, idx1, idx2 = case
+
+        scenario1 = df_cleaned.iloc[idx1]
+        scenario2 = df_cleaned.iloc[idx2]
+
+        title1 = scenario1["title"]
+        title2 = scenario2["title"]
+
+        print(f"\n{i}. Similarity: {similarity:.4f} | Model: {actor.upper()}")
+        print(f"   Scenario 1 (ID: {scenario1['submission_id']}): {title1}")
+        print(f"   Scenario 2 (ID: {scenario2['submission_id']}): {title2}")
+
+        llm_reason1 = None
+        llm_reason2 = None
+        for reason_col in [
+            f"{actor}_reason_1",
+            f"{actor}_reason_2",
+            f"{actor}_reason_3",
+        ]:
+            if (
+                reason_col in scenario1
+                and pd.notna(scenario1[reason_col])
+                and llm_reason1 is None
+            ):
+                llm_reason1 = scenario1[reason_col]
+            if (
+                reason_col in scenario2
+                and pd.notna(scenario2[reason_col])
+                and llm_reason2 is None
+            ):
+                llm_reason2 = scenario2[reason_col]
+
+        reason1_preview = llm_reason1
+        reason2_preview = llm_reason2
+
+        print(f"   {actor.upper()} Reasoning:")
+        print(f"     Scenario 1: {reason1_preview}")
+        print(f"     Scenario 2: {reason2_preview}")
+
+    return
