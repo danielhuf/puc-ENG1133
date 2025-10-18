@@ -11,13 +11,6 @@
 # - **Human Redditors**: The author of the top comment of each scenario submission.
 # %% Import libraries
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict
-from tqdm import tqdm
-from sklearn.preprocessing import normalize
 import pickle
 import json
 from pathlib import Path
@@ -32,14 +25,11 @@ from embedding_utils import (
     plot_column_similarity_comparison,
     summarize_column_characteristics,
     display_edge_scenario_similarities,
+    analyze_reason_similarities,
+    plot_reason_similarity_comparison,
+    summarize_reason_characteristics,
+    cross_analyze_actor_similarity,
 )
-
-plt.rcParams["figure.max_open_warning"] = 0
-plt.rcParams["figure.dpi"] = 100
-plt.rcParams["savefig.dpi"] = 100
-
-plt.style.use("seaborn-v0_8")
-sns.set_palette("husl")
 
 
 # %% Load and explore the embeddings data
@@ -129,106 +119,6 @@ display_edge_scenario_similarities(embeddings_dict, actors, reason_types, df_cle
 
 
 # %% Reason-wise similarity analysis
-def analyze_reason_similarities(
-    embeddings_dict: Dict[str, np.ndarray],
-    actors: List[str],
-    reason_types: List[str],
-) -> Dict:
-    """Analyze intra-actor reasoning consistency across different reasoning approaches (reason-wise analysis).
-
-    This function examines how consistent each actor is when applying different reasoning
-    approaches to the same ethical scenario. It measures the similarity between a actor's
-    various reasoning types (reason_1, reason_2, etc.) when confronted with identical
-    ethical dilemmas.
-
-    For each actor-scenario combination, the function compares all available reasoning
-    approaches pairwise and aggregates the results across all scenarios.
-
-    Args:
-        embeddings_dict: Dictionary mapping column names to embedding arrays
-        actors: List of actor names to analyze
-        reason_types: List of available reasoning types to compare
-
-    Returns:
-        Dictionary with structure:
-        {
-            'actor_name': {
-                'similarities': numpy_array_of_all_reason_pair_similarities,
-                'mean_similarity': average_reasoning_similarity,
-                'std_similarity': variability_in_reasoning_consistency,
-                'available_reasons': list_of_reasoning_types_for_actor
-            }
-        }
-
-    1. For each actor, identify available reasoning approaches
-    2. For each scenario, compare all unique reasoning type pairs
-    3. Aggregate similarity scores across all scenarios and reason pairs
-    4. Calculate statistics on the resulting similarity distribution
-    """
-
-    reason_similarities = {}
-
-    for actor in tqdm(actors, desc="Processing actors"):
-        available_reasons = []
-        actor_embeddings = {}
-
-        if actor == "human":
-            if "top_comment_embedding" in embeddings_dict:
-                available_reasons.append("top_comment")
-                actor_embeddings["top_comment"] = embeddings_dict[
-                    "top_comment_embedding"
-                ]
-                # For human actor, reason consistency is 1.0 (perfect consistency since only one comment per scenario)
-                reason_similarities[actor] = {
-                    "similarities": np.array([1.0]),
-                    "mean_similarity": 1.0,
-                    "std_similarity": 0.0,
-                    "available_reasons": available_reasons,
-                }
-            continue
-        else:
-            for reason_type in reason_types:
-                col_name = f"{actor}_{reason_type}_embedding"
-                if col_name in embeddings_dict:
-                    available_reasons.append(reason_type)
-                    actor_embeddings[reason_type] = embeddings_dict[col_name]
-
-        if not available_reasons:
-            continue
-
-        n_rows = actor_embeddings[available_reasons[0]].shape[0]
-
-        all_similarities = []
-
-        for i, reason1 in enumerate(available_reasons):
-            for reason2 in available_reasons[i + 1 :]:
-                pair_similarities = []
-                for row_idx in tqdm(
-                    range(n_rows), desc=f"Processing {actor} reason pairs", leave=False
-                ):
-                    embedding1 = actor_embeddings[reason1][row_idx].reshape(1, -1)
-                    embedding2 = actor_embeddings[reason2][row_idx].reshape(1, -1)
-
-                    embedding1_norm = normalize(embedding1, norm="l2")
-                    embedding2_norm = normalize(embedding2, norm="l2")
-
-                    similarity = cosine_similarity(embedding1_norm, embedding2_norm)[
-                        0, 0
-                    ]
-                    pair_similarities.append(similarity)
-
-                all_similarities.extend(pair_similarities)
-
-        reason_similarities[actor] = {
-            "similarities": np.array(all_similarities),
-            "mean_similarity": np.mean(all_similarities),
-            "std_similarity": np.std(all_similarities),
-            "available_reasons": available_reasons,
-        }
-
-    return reason_similarities
-
-
 cache_path = Path("../results/base/reason_similarities.pkl")
 if cache_path.exists():
     with open(cache_path, "rb") as f:
@@ -244,112 +134,10 @@ else:
 
 
 # %% Visualize reason-wise similarities
-def plot_reason_similarity_comparison(reason_similarities: Dict):
-    """Compare reason-wise similarity distributions with separate subplots for each actor."""
-
-    actor_names = list(reason_similarities.keys())
-    n_actors = len(actor_names)
-
-    height_ratios = [2.5] * n_actors + [3]
-
-    _, axes = plt.subplots(
-        n_actors + 1,
-        1,
-        figsize=(12, 2.5 * n_actors + 3),
-        gridspec_kw={"height_ratios": height_ratios},
-    )
-
-    if n_actors == 1:
-        axes = [axes[0], axes[1]]
-
-    for i, (actor, data) in enumerate(
-        tqdm(reason_similarities.items(), desc="Plotting reason similarities")
-    ):
-        ax = axes[i]
-        ax.hist(
-            data["similarities"],
-            bins=30,
-            alpha=0.7,
-            color="skyblue",
-            edgecolor="black",
-            density=True,
-        )
-
-        mean_sim = data["mean_similarity"]
-        median_sim = np.median(data["similarities"])
-        n_reasons = len(data["available_reasons"])
-        ax.set_title(f"{actor.upper()} ({n_reasons} reasonings)")
-        ax.set_xlabel("Cosine Similarity")
-        ax.set_ylabel("Density")
-        ax.grid(True, alpha=0.3)
-
-        ax.axvline(
-            mean_sim,
-            color="red",
-            linestyle="--",
-            alpha=0.8,
-            label=f"Mean: {mean_sim:.3f}",
-        )
-        ax.axvline(
-            median_sim,
-            color="blue",
-            linestyle="-",
-            alpha=0.8,
-            label=f"Median: {median_sim:.3f}",
-        )
-        ax.set_xlim(0, 1)
-        ax.legend()
-
-    ax_box = axes[-1]
-
-    similarities_data = [data["similarities"] for data in reason_similarities.values()]
-    actor_names = list(reason_similarities.keys())
-
-    box_plot = ax_box.boxplot(
-        similarities_data, tick_labels=actor_names, patch_artist=True
-    )
-
-    for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
-        patch.set_alpha(0.8)
-    ax_box.set_title("Reason-wise Similarity Comparison")
-    ax_box.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.show()
-
-
 plot_reason_similarity_comparison(reason_similarities)
 
 
 # %% Statistical summary of reason-wise characteristics
-def summarize_reason_characteristics(reason_similarities: Dict):
-    """Provide statistical summary of each actor's reason-wise characteristics."""
-
-    print(f"=== REASON-WISE SIMILARITY SUMMARY ===\n")
-
-    summary_data = []
-    for actor, data in reason_similarities.items():
-        summary_data.append(
-            {
-                "Actor": actor,
-                "Mean Similarity": data["mean_similarity"],
-                "Std Similarity": data["std_similarity"],
-                "Min Similarity": np.min(data["similarities"]),
-                "Max Similarity": np.max(data["similarities"]),
-                "Q25": np.percentile(data["similarities"], 25),
-                "Q75": np.percentile(data["similarities"], 75),
-                "Num Reasons": len(data["available_reasons"]),
-            }
-        )
-
-    summary_df = pd.DataFrame(summary_data).sort_values("Actor")
-
-    print(summary_df.round(4))
-
-    return summary_df
-
-
 reason_summary_df = summarize_reason_characteristics(reason_similarities)
 
 # %% Save reason-wise analysis results
@@ -362,99 +150,6 @@ print(
 
 
 # %% Cross-analysis: Intra-Actor similarity vs. inter-Actor similarity
-def cross_analyze_actor_similarity(
-    row_similarities: Dict, column_similarities: Dict, reason_similarities: Dict
-):
-    """Analyze the relationship between inter-actor similarity and intra-actor similarity."""
-
-    inter_actor_means = {}
-    for actor in column_similarities.keys():
-        actor_pairs = [
-            pair for pair in list(row_similarities.values())[0].keys() if actor in pair
-        ]
-        all_similarities = []
-
-        for row_data in row_similarities.values():
-            for pair in actor_pairs:
-                if pair in row_data:
-                    all_similarities.append(row_data[pair])
-
-        if all_similarities:
-            inter_actor_means[actor] = np.mean(all_similarities)
-
-    comparison_data = []
-    for actor in column_similarities.keys():
-        if actor in inter_actor_means:
-            comparison_data.append(
-                {
-                    "Actor": actor,
-                    "Intra-Actor_Diversity_Score": 1
-                    - column_similarities[actor]["mean_similarity"],
-                    "Inter-Actor_Similarity_Score": inter_actor_means[actor],
-                    "Reason_Consistency_Score": reason_similarities[actor][
-                        "mean_similarity"
-                    ],
-                }
-            )
-
-    comparison_df = pd.DataFrame(comparison_data)
-
-    plt.figure(figsize=(12, 8))
-
-    plot_df = comparison_df.dropna(subset=["Reason_Consistency_Score"])
-
-    from matplotlib.colors import Normalize
-
-    min_val = plot_df["Reason_Consistency_Score"].min()
-    max_val = plot_df["Reason_Consistency_Score"].max()
-
-    norm = Normalize(vmin=min_val, vmax=max_val)
-
-    scatter = plt.scatter(
-        plot_df["Intra-Actor_Diversity_Score"],
-        plot_df["Inter-Actor_Similarity_Score"],
-        s=120,
-        alpha=0.8,
-        c=plot_df["Reason_Consistency_Score"],
-        cmap="Blues",
-        norm=norm,
-        edgecolors="black",
-        linewidth=0.5,
-    )
-
-    plt.colorbar(scatter, label="Reason Consistency Score")
-
-    for _, row in plot_df.iterrows():
-        plt.annotate(
-            row["Actor"],
-            (row["Intra-Actor_Diversity_Score"], row["Inter-Actor_Similarity_Score"]),
-            xytext=(5, 5),
-            textcoords="offset points",
-            fontweight="bold",
-        )
-
-    plt.xlabel("1 - Intra-Actor Similarity")
-    plt.ylabel("Inter-Actor Similarity")
-
-    title = "Intra-Actor similarity vs. inter-Actor similarity Analysis (Color = Reason-wise consistency)"
-    plt.title(title)
-    plt.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.show()
-
-    print("=== CROSS-ANALYSIS RESULTS ===")
-    display_cols = [
-        "Actor",
-        "Intra-Actor_Diversity_Score",
-        "Inter-Actor_Similarity_Score",
-        "Reason_Consistency_Score",
-    ]
-    print(comparison_df[display_cols].round(4))
-
-    return comparison_df
-
-
 cross_analysis_df = cross_analyze_actor_similarity(
     row_similarities, column_similarities, reason_similarities
 )
