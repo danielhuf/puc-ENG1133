@@ -1,8 +1,8 @@
 # %% [markdown]
 ### Embedding Similarity Analysis
 #
-# This notebook analyzes similarities between the embeddings of the ethical dilemma dataset in both Portuguese, German, Spanish, and French in three main ways:
-# 1. **Scenario-wise analysis**: Compare different actors' responses to the same scenario (ethical dilemma)
+# This notebook analyzes similarities between the embeddings of the moral dilemma dataset in both Portuguese, German, Spanish, and French in three main ways:
+# 1. **Scenario-wise analysis**: Compare different actors' responses to the same scenario (moral dilemma)
 # 2. **Actor-wise analysis**: Compare a same actor's responses to different scenarios
 # 3. **Reason-wise analysis**: Compare different reasoning versions for a same actor in the same scenario
 #
@@ -45,7 +45,7 @@ actors_fr, reason_types_fr = identify_actors_and_reasons(embeddings_dict_fr)
 # %% [markdown]
 # ## 1. Scenario-wise Analysis
 #
-# This analysis compares how human redditors and LLM models respond to the same ethical dilemma.
+# This analysis compares how human redditors and LLM models respond to the same moral dilemma.
 # For each scenario (row), embedding similarities are calculated between all pairs of actors.
 
 # %% Scenario-wise similarity analysis
@@ -87,11 +87,11 @@ save_analysis_results("es", row_summary_df_es, "scenario_wise")
 save_analysis_results("fr", row_summary_df_fr, "scenario_wise")
 
 # %% Display LLM-Human similarity edge cases
-df_cleaned_base = pd.read_csv("../data/ethical_dilemmas_cleaned.csv")
-df_cleaned_br = pd.read_csv("../data/ethical_dilemmas_cleaned_br.csv")
-df_cleaned_de = pd.read_csv("../data/ethical_dilemmas_cleaned_de.csv")
-df_cleaned_es = pd.read_csv("../data/ethical_dilemmas_cleaned_es.csv")
-df_cleaned_fr = pd.read_csv("../data/ethical_dilemmas_cleaned_fr.csv")
+df_cleaned_base = pd.read_csv("../data/moral_dilemmas_cleaned.csv")
+df_cleaned_br = pd.read_csv("../data/moral_dilemmas_cleaned_br.csv")
+df_cleaned_de = pd.read_csv("../data/moral_dilemmas_cleaned_de.csv")
+df_cleaned_es = pd.read_csv("../data/moral_dilemmas_cleaned_es.csv")
+df_cleaned_fr = pd.read_csv("../data/moral_dilemmas_cleaned_fr.csv")
 
 display_edge_llm_human_similarities(row_similarities_base, df_cleaned_base, "Base")
 display_edge_llm_human_similarities(row_similarities_br, df_cleaned_br, "Portuguese")
@@ -102,7 +102,7 @@ display_edge_llm_human_similarities(row_similarities_fr, df_cleaned_fr, "French"
 # %% [markdown]
 # ## 2. Actor-wise Analysis
 #
-# This analysis compares how a same actor responds to different ethical dilemmas.
+# This analysis compares how a same actor responds to different moral dilemmas.
 # For each actor, we calculate the similarity between all pairs of scenarios.
 
 # %% Actor-wise similarity analysis
@@ -173,7 +173,7 @@ display_edge_scenario_similarities(
 # %% [markdown]
 # ## 3. Reason-wise Analysis
 #
-# This analysis compares how consistent each actor's reasonings are when answering the same ethical dilemma.
+# This analysis compares how consistent each actor's reasonings are when answering the same moral dilemma.
 
 # %% Reason-wise similarity analysis
 reason_similarities_base = load_or_compute_similarities(
@@ -250,7 +250,7 @@ save_analysis_results("fr", cross_analysis_df_fr, "cross")
 # %% [markdown]
 # ## Summary of Findings
 #
-# This analysis examines embedding similarities across all available reasoning types for 7 LLM actors and human responses on ethical scenarios across five datasets: English (Base), Portuguese, German, Spanish, and French.
+# This analysis examines embedding similarities across all available reasoning types for 7 LLM actors and human responses on moral scenarios across five datasets: English (Base), Portuguese, German, Spanish, and French.
 #
 # ### Key Findings:
 #
@@ -265,7 +265,7 @@ save_analysis_results("fr", cross_analysis_df_fr, "cross")
 #
 # **By Model (Average Across Languages):**
 # - **GPT-3.5 ↔ GPT-4**: Highest agreement (~55-80% across all languages) - most aligned reasoning
-# - **Claude ↔ GPT-4**: Strong agreement (~45-70%) - similar ethical frameworks
+# - **Claude ↔ GPT-4**: Strong agreement (~45-70%) - similar moral frameworks
 # - **Bison ↔ Claude**: Strong agreement in English (66.9%) - compatible reasoning
 # - **Gemini ↔ GPT models**: Moderate agreement (~40-50%) - compatible reasoning
 # - **Llama ↔ Others**: Low-moderate agreement (~15-60%) - more aligned in English base

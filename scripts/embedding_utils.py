@@ -57,9 +57,9 @@ def analyze_row_similarities(
     actors: List[str],
     reason_types: List[str],
 ) -> Dict:
-    """Analyze inter-actor similarity on the same ethical scenarios.
+    """Analyze inter-actor similarity on the same moral scenarios.
 
-    This function compares how different LLM models and human redditors respond to a same ethical dilemma.
+    This function compares how different LLM models and human redditors respond to a same moral dilemma.
     For each scenario (row) in the dataset, it calculates similarities between all possible
     actor pairs by comparing their reasoning embeddings.
 
@@ -466,10 +466,10 @@ def analyze_column_similarities(
     actors: List[str],
     reason_types: List[str],
 ) -> Dict:
-    """Analyze intra-actor similarity across different ethical scenarios.
+    """Analyze intra-actor similarity across different moral scenarios.
 
     This function measures how consistent each actor is when responding to different
-    ethical dilemmas. It calculates the similarity between all pairs of scenarios for
+    moral dilemmas. It calculates the similarity between all pairs of scenarios for
     each actor.
 
     The analysis averages all available reasoning approaches (reason_1, reason_2, etc.)
@@ -889,9 +889,9 @@ def analyze_reason_similarities(
     """Analyze intra-actor reasoning consistency across different reasoning approaches (reason-wise analysis).
 
     This function examines how consistent each actor is when applying different reasoning
-    approaches to the same ethical scenario. It measures the similarity between a actor's
+    approaches to the same moral scenario. It measures the similarity between a actor's
     various reasoning types (reason_1, reason_2, etc.) when confronted with identical
-    ethical dilemmas.
+    moral dilemmas.
 
     For each actor-scenario combination, the function compares all available reasoning
     approaches pairwise and aggregates the results across all scenarios.

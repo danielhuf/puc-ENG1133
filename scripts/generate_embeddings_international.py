@@ -16,7 +16,7 @@ def process_dataset(language_code, model):
     """Process a single language dataset and generate embeddings."""
     print(f"\n=== Processing {language_code.upper()} dataset ===")
 
-    input_file = f"data/ethical_dilemmas_cleaned_{language_code}.csv"
+    input_file = f"data/moral_dilemmas_cleaned_{language_code}.csv"
     output_file = f"data/embeddings_{language_code}.csv"
     checkpoint_file = f"data/embeddings_{language_code}_checkpoint.csv"
 

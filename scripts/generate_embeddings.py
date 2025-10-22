@@ -18,7 +18,7 @@ def main() -> None:
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
     print("Reading CSV file...")
-    df = pd.read_csv("data/ethical_dilemmas_cleaned.csv")
+    df = pd.read_csv("data/moral_dilemmas_cleaned.csv")
 
     columns_to_embed = [
         "selftext",
@@ -83,9 +83,7 @@ def main() -> None:
 
     print("All columns processed.")
     embeddings_df.to_csv("data/embeddings.csv", index=False)
-    print(
-        "Sentence Transformers embeddings saved to 'data/embeddings.csv'"
-    )
+    print("Sentence Transformers embeddings saved to 'data/embeddings.csv'")
 
 
 if __name__ == "__main__":

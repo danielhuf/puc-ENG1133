@@ -20,10 +20,10 @@ COLUMNS_TO_CHECK = [
 ]
 
 CSV_FILES = [
-    "ethical_dilemmas_br.csv",
-    "ethical_dilemmas_de.csv",
-    "ethical_dilemmas_es.csv",
-    "ethical_dilemmas_fr.csv",
+    "moral_dilemmas_br.csv",
+    "moral_dilemmas_de.csv",
+    "moral_dilemmas_es.csv",
+    "moral_dilemmas_fr.csv",
 ]
 
 COLUMNS_TO_CLEAN = [
@@ -153,7 +153,7 @@ def clean_dataframe(df, filename):
     for col in columns_to_clean:
         df_cleaned[col] = df_cleaned[col].apply(clean_text)
 
-    language_code = filename.replace("ethical_dilemmas_", "").replace(".csv", "")
+    language_code = filename.replace("moral_dilemmas_", "").replace(".csv", "")
     df_cleaned["reddit_label"] = df_cleaned["top_comment"].apply(
         lambda x: extract_reddit_label(x, language_code)
     )

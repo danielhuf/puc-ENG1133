@@ -107,7 +107,7 @@ class ProcessingConfig:
             raise ValueError(f"Unsupported language: {self.language_code}")
 
         if not self.output_file:
-            self.output_file = f"data/ethical_dilemmas_{self.language_code}.csv"
+            self.output_file = f"data/moral_dilemmas_{self.language_code}.csv"
 
 
 class LLMError(Exception):
@@ -604,7 +604,7 @@ def load_dataset(language_code: str) -> pd.DataFrame:
     Raises:
         FileNotFoundError: If dataset file is not found
     """
-    file_path = f"data/ethical_dilemmas_{language_code}.csv"
+    file_path = f"data/moral_dilemmas_{language_code}.csv"
     try:
         return pd.read_csv(file_path)
     except FileNotFoundError:

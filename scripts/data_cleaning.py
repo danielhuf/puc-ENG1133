@@ -35,8 +35,8 @@ def process_csv_data(input_file: str, output_file: str) -> None:
 
 def main() -> None:
     """Main function to process the data."""
-    input_file = "data/ethical_dilemmas.csv"
-    output_file = "data/ethical_dilemmas_cleaned.csv"
+    input_file = "data/moral_dilemmas.csv"
+    output_file = "data/moral_dilemmas_cleaned.csv"
 
     try:
         process_csv_data(input_file, output_file)
