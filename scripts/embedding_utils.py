@@ -24,6 +24,25 @@ plt.rcParams["savefig.dpi"] = 100
 plt.style.use("seaborn-v0_8")
 
 
+def get_language_color(language_code: str) -> str:
+    """Get color based on language code.
+
+    Args:
+        language_code: Language code (Base, Portuguese, German, Spanish, French)
+
+    Returns:
+        Color name for plotting
+    """
+    color_map = {
+        "Base": "steelblue",
+        "Portuguese": "lightgreen",
+        "German": "dimgray",
+        "Spanish": "goldenrod",
+        "French": "skyblue",
+    }
+    return color_map.get(language_code, "skyblue")
+
+
 def load_embeddings(embeddings_file: str) -> Dict[str, np.ndarray]:
     """Load embeddings from CSV and organize them by column.
 
@@ -269,7 +288,7 @@ def plot_row_similarity_distribution(row_similarities: Dict, language_code: str)
                         similarities,
                         bins=15,
                         alpha=0.7,
-                        color="skyblue",
+                        color=get_language_color(language_code),
                         edgecolor="black",
                         density=True,
                     )
@@ -565,7 +584,7 @@ def plot_column_similarity_comparison(column_similarities: Dict, language_code: 
             data["similarities"],
             bins=30,
             alpha=0.7,
-            color="skyblue",
+            color=get_language_color(language_code),
             edgecolor="black",
             density=True,
         )
@@ -604,7 +623,7 @@ def plot_column_similarity_comparison(column_similarities: Dict, language_code: 
     )
 
     for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
+        patch.set_facecolor(get_language_color(language_code))
         patch.set_alpha(0.8)
     ax_box.set_title(f"Intra-Actor Similarity Comparison ({language_code.upper()})")
     ax_box.grid(True, alpha=0.3)
@@ -1007,7 +1026,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: 
             data["similarities"],
             bins=30,
             alpha=0.7,
-            color="skyblue",
+            color=get_language_color(language_code),
             edgecolor="black",
             density=True,
         )
@@ -1047,7 +1066,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: 
     )
 
     for patch in box_plot["boxes"]:
-        patch.set_facecolor("skyblue")
+        patch.set_facecolor(get_language_color(language_code))
         patch.set_alpha(0.8)
     ax_box.set_title(f"Reason-wise Similarity Comparison ({language_code.upper()})")
     ax_box.grid(True, alpha=0.3)
