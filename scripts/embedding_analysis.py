@@ -16,6 +16,9 @@ from embedding_utils import (
     load_or_compute_similarities,
     identify_actors_and_reasons,
     plot_row_similarity_distribution,
+    compute_global_similarity_bounds,
+    compute_global_column_similarity_bounds,
+    compute_global_reason_similarity_bounds,
     summarize_row_characteristics,
     save_analysis_results,
     display_edge_llm_human_similarities,
@@ -66,12 +69,22 @@ row_similarities_fr = load_or_compute_similarities(
     "fr", embeddings_dict_fr, actors_fr, reason_types_fr, "row"
 )
 
-# %% Visualize scenario-wise similarities
-plot_row_similarity_distribution(row_similarities_base, "Base")
-plot_row_similarity_distribution(row_similarities_br, "Portuguese")
-plot_row_similarity_distribution(row_similarities_de, "German")
-plot_row_similarity_distribution(row_similarities_es, "Spanish")
-plot_row_similarity_distribution(row_similarities_fr, "French")
+# %% Compute global bounds for standardized plotting
+all_row_similarities = {
+    "Base": row_similarities_base,
+    "Portuguese": row_similarities_br,
+    "German": row_similarities_de,
+    "Spanish": row_similarities_es,
+    "French": row_similarities_fr,
+}
+global_bounds = compute_global_similarity_bounds(all_row_similarities)
+
+# %% Visualize scenario-wise similarities with standardized axis ranges
+plot_row_similarity_distribution(row_similarities_base, "Base", global_bounds)
+plot_row_similarity_distribution(row_similarities_br, "Portuguese", global_bounds)
+plot_row_similarity_distribution(row_similarities_de, "German", global_bounds)
+plot_row_similarity_distribution(row_similarities_es, "Spanish", global_bounds)
+plot_row_similarity_distribution(row_similarities_fr, "French", global_bounds)
 
 # %% Statistical summary of scenario-wise similarities
 row_summary_df_base = summarize_row_characteristics(row_similarities_base, "Base")
@@ -123,12 +136,32 @@ column_similarities_fr = analyze_column_similarities(
     embeddings_dict_fr, actors_fr, reason_types_fr
 )
 
-# %% Visualize actor-wise similarities
-plot_column_similarity_comparison(column_similarities_base, "Base")
-plot_column_similarity_comparison(column_similarities_br, "Portuguese")
-plot_column_similarity_comparison(column_similarities_de, "German")
-plot_column_similarity_comparison(column_similarities_es, "Spanish")
-plot_column_similarity_comparison(column_similarities_fr, "French")
+# %% Compute global bounds for standardized column plotting
+all_column_similarities = {
+    "Base": column_similarities_base,
+    "Portuguese": column_similarities_br,
+    "German": column_similarities_de,
+    "Spanish": column_similarities_es,
+    "French": column_similarities_fr,
+}
+global_column_bounds = compute_global_column_similarity_bounds(all_column_similarities)
+
+# %% Visualize actor-wise similarities with standardized axis ranges
+plot_column_similarity_comparison(
+    column_similarities_base, "Base", global_column_bounds
+)
+plot_column_similarity_comparison(
+    column_similarities_br, "Portuguese", global_column_bounds
+)
+plot_column_similarity_comparison(
+    column_similarities_de, "German", global_column_bounds
+)
+plot_column_similarity_comparison(
+    column_similarities_es, "Spanish", global_column_bounds
+)
+plot_column_similarity_comparison(
+    column_similarities_fr, "French", global_column_bounds
+)
 
 # %% Statistical summary of actor-wise differences
 column_summary_df_base = summarize_column_characteristics(
@@ -193,12 +226,32 @@ reason_similarities_fr = load_or_compute_similarities(
     "fr", embeddings_dict_fr, actors_fr, reason_types_fr, "reason"
 )
 
-# %% Visualize reason-wise similarities
-plot_reason_similarity_comparison(reason_similarities_base, "Base")
-plot_reason_similarity_comparison(reason_similarities_br, "Portuguese")
-plot_reason_similarity_comparison(reason_similarities_de, "German")
-plot_reason_similarity_comparison(reason_similarities_es, "Spanish")
-plot_reason_similarity_comparison(reason_similarities_fr, "French")
+# %% Compute global bounds for standardized reason plotting
+all_reason_similarities = {
+    "Base": reason_similarities_base,
+    "Portuguese": reason_similarities_br,
+    "German": reason_similarities_de,
+    "Spanish": reason_similarities_es,
+    "French": reason_similarities_fr,
+}
+global_reason_bounds = compute_global_reason_similarity_bounds(all_reason_similarities)
+
+# %% Visualize reason-wise similarities with standardized axis ranges (excluding human actors)
+plot_reason_similarity_comparison(
+    reason_similarities_base, "Base", global_reason_bounds
+)
+plot_reason_similarity_comparison(
+    reason_similarities_br, "Portuguese", global_reason_bounds
+)
+plot_reason_similarity_comparison(
+    reason_similarities_de, "German", global_reason_bounds
+)
+plot_reason_similarity_comparison(
+    reason_similarities_es, "Spanish", global_reason_bounds
+)
+plot_reason_similarity_comparison(
+    reason_similarities_fr, "French", global_reason_bounds
+)
 
 # %% Statistical summary of reason-wise characteristics
 reason_summary_df_base = summarize_reason_characteristics(

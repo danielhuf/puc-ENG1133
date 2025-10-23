@@ -243,11 +243,57 @@ def load_or_compute_similarities(
     return similarities
 
 
-def plot_row_similarity_distribution(row_similarities: Dict, language_code: str):
+def compute_global_similarity_bounds(
+    all_row_similarities: Dict[str, Dict],
+) -> Tuple[float, float, float, float]:
+    """Compute global min/max values for similarity and density across all datasets.
+
+    Args:
+        all_row_similarities: Dictionary mapping language codes to row similarities
+
+    Returns:
+        Tuple of (global_min_sim, global_max_sim, global_min_density, global_max_density)
+    """
+    all_similarities = []
+    all_densities = []
+
+    for language_code, row_similarities in all_row_similarities.items():
+        pair_similarities = {}
+        for row_data in row_similarities.values():
+            for pair, sim in row_data.items():
+                if pair not in pair_similarities:
+                    pair_similarities[pair] = []
+                pair_similarities[pair].append(sim)
+
+        for similarities in pair_similarities.values():
+            all_similarities.extend(similarities)
+
+            hist, bins = np.histogram(similarities, bins=15, density=True)
+            all_densities.extend(hist)
+
+    global_min_sim = min(all_similarities)
+    global_max_sim = max(all_similarities)
+    global_min_density = min(all_densities)
+    global_max_density = max(all_densities)
+
+    return global_min_sim, global_max_sim, global_min_density, global_max_density
+
+
+def plot_row_similarity_distribution(
+    row_similarities: Dict,
+    language_code: str,
+    global_bounds: Tuple[float, float, float, float] = None,
+):
     """Plot distribution of similarities across scenarios.
 
     Displays mean similarities across all available reason type combinations
     for each actor pair.
+
+    Args:
+        row_similarities: Dictionary containing similarity data
+        language_code: Language code for coloring
+        global_bounds: Optional tuple of (min_sim, max_sim, min_density, max_density)
+                      for standardized axis ranges across all datasets
     """
 
     pair_similarities = {}
@@ -312,6 +358,11 @@ def plot_row_similarity_distribution(row_similarities: Dict, language_code: str)
                     ax.set_ylabel("Density", fontsize=10)
                     ax.tick_params(labelsize=8)
                     ax.grid(True, alpha=0.3)
+
+                    if global_bounds is not None:
+                        min_sim, max_sim, min_density, max_density = global_bounds
+                        ax.set_xlim(min_sim, max_sim)
+                        ax.set_ylim(min_density, max_density)
                 else:
                     ax.set_visible(False)
             else:
@@ -561,8 +612,49 @@ def analyze_column_similarities(
     return actor_similarities
 
 
-def plot_column_similarity_comparison(column_similarities: Dict, language_code: str):
-    """Compare intra-actor similarity distributions."""
+def compute_global_column_similarity_bounds(
+    all_column_similarities: Dict[str, Dict],
+) -> Tuple[float, float, float, float]:
+    """Compute global min/max values for column similarity and density across all datasets.
+
+    Args:
+        all_column_similarities: Dictionary mapping language codes to column similarities
+
+    Returns:
+        Tuple of (global_min_sim, global_max_sim, global_min_density, global_max_density)
+    """
+    all_similarities = []
+    all_densities = []
+
+    for language_code, column_similarities in all_column_similarities.items():
+        for actor, data in column_similarities.items():
+            similarities = data["similarities"]
+            all_similarities.extend(similarities)
+
+            hist, bins = np.histogram(similarities, bins=30, density=True)
+            all_densities.extend(hist)
+
+    global_min_sim = min(all_similarities)
+    global_max_sim = max(all_similarities)
+    global_min_density = min(all_densities)
+    global_max_density = max(all_densities)
+
+    return global_min_sim, global_max_sim, global_min_density, global_max_density
+
+
+def plot_column_similarity_comparison(
+    column_similarities: Dict,
+    language_code: str,
+    global_bounds: Tuple[float, float, float, float] = None,
+):
+    """Compare intra-actor similarity distributions.
+
+    Args:
+        column_similarities: Dictionary containing similarity data
+        language_code: Language code for coloring
+        global_bounds: Optional tuple of (min_sim, max_sim, min_density, max_density)
+                      for standardized axis ranges across all datasets
+    """
 
     actor_names = list(column_similarities.keys())
     n_actors = len(actor_names)
@@ -625,7 +717,13 @@ def plot_column_similarity_comparison(column_similarities: Dict, language_code: 
             alpha=0.8,
             label=f"Median: {median_sim:.3f}",
         )
-        ax.set_xlim(0, 1)
+
+        if global_bounds is not None:
+            min_sim, max_sim, min_density, max_density = global_bounds
+            ax.set_xlim(min_sim, max_sim)
+            ax.set_ylim(min_density, max_density)
+        else:
+            ax.set_xlim(0, 1)
         ax.legend()
 
     plt.tight_layout()
@@ -1000,10 +1098,55 @@ def analyze_reason_similarities(
     return reason_similarities
 
 
-def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: str):
-    """Compare reason-wise similarity distributions with separate subplots for each actor."""
+def compute_global_reason_similarity_bounds(
+    all_reason_similarities: Dict[str, Dict],
+) -> Tuple[float, float, float, float]:
+    """Compute global min/max values for reason similarity and density across all datasets.
 
-    actor_names = list(reason_similarities.keys())
+    Args:
+        all_reason_similarities: Dictionary mapping language codes to reason similarities
+
+    Returns:
+        Tuple of (global_min_sim, global_max_sim, global_min_density, global_max_density)
+    """
+    all_similarities = []
+    all_densities = []
+
+    for language_code, reason_similarities in all_reason_similarities.items():
+        for actor, data in reason_similarities.items():
+            if actor != "human":
+                similarities = data["similarities"]
+                all_similarities.extend(similarities)
+
+                hist, bins = np.histogram(similarities, bins=30, density=True)
+                all_densities.extend(hist)
+
+    global_min_sim = min(all_similarities)
+    global_max_sim = max(all_similarities)
+    global_min_density = min(all_densities)
+    global_max_density = max(all_densities)
+
+    return global_min_sim, global_max_sim, global_min_density, global_max_density
+
+
+def plot_reason_similarity_comparison(
+    reason_similarities: Dict,
+    language_code: str,
+    global_bounds: Tuple[float, float, float, float] = None,
+):
+    """Compare reason-wise similarity distributions with separate subplots for each actor.
+
+    Args:
+        reason_similarities: Dictionary containing similarity data
+        language_code: Language code for coloring
+        global_bounds: Optional tuple of (min_sim, max_sim, min_density, max_density)
+                      for standardized axis ranges across all datasets
+    """
+
+    filtered_reason_similarities = {
+        k: v for k, v in reason_similarities.items() if k != "human"
+    }
+    actor_names = list(filtered_reason_similarities.keys())
     n_actors = len(actor_names)
 
     height_ratios = [3] + [2.5] * n_actors
@@ -1020,8 +1163,10 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: 
 
     ax_box = axes[0]
 
-    similarities_data = [data["similarities"] for data in reason_similarities.values()]
-    actor_names = list(reason_similarities.keys())
+    similarities_data = [
+        data["similarities"] for data in filtered_reason_similarities.values()
+    ]
+    actor_names = list(filtered_reason_similarities.keys())
 
     box_plot = ax_box.boxplot(
         similarities_data, tick_labels=actor_names, patch_artist=True
@@ -1034,7 +1179,7 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: 
     ax_box.grid(True, alpha=0.3)
 
     for i, (actor, data) in enumerate(
-        tqdm(reason_similarities.items(), desc="Plotting reason similarities")
+        tqdm(filtered_reason_similarities.items(), desc="Plotting reason similarities")
     ):
         ax = axes[i + 1]
         ax.hist(
@@ -1068,7 +1213,13 @@ def plot_reason_similarity_comparison(reason_similarities: Dict, language_code: 
             alpha=0.8,
             label=f"Median: {median_sim:.3f}",
         )
-        ax.set_xlim(0, 1)
+
+        if global_bounds is not None:
+            min_sim, max_sim, min_density, max_density = global_bounds
+            ax.set_xlim(min_sim, max_sim)
+            ax.set_ylim(min_density, max_density)
+        else:
+            ax.set_xlim(0, 1)
         ax.legend()
 
     plt.tight_layout()
@@ -1223,8 +1374,8 @@ def cross_analyze_multiple_languages(
             ax.set_ylabel("Inter-Actor Similarity")
             ax.set_title(f"{language_code}")
             ax.grid(True, alpha=0.3)
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
+            ax.set_xlim(0.2, 1.0)
+            ax.set_ylim(0, 0.8)
 
             return scatter
         return None
