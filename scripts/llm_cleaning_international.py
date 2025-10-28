@@ -37,11 +37,11 @@ COLUMNS_TO_CLEAN = [
 
 REDDIT_LABEL_MAPPINGS = {
     "br": {
+        "NEOB": "NTA",
+        "TEOB": "ESH",
         "EOB": "YTA",
         "EOT": "YTA",
-        "NEOB": "NTA",
         "NGM": "NAH",
-        "TEOB": "ESH",
         "INFO": "INFO",
     },
     "de": {"BDA": "YTA", "NDA": "NTA", "KAH": "NAH", "ASA": "ESH", "INFO": "INFO"},
