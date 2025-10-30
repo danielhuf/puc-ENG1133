@@ -84,11 +84,17 @@ def plot_verdict_distribution(fractions_df, title):
         "gpt4": "GPT-4",
         "claude": "Claude Haiku",
         "bison": "PaLM 2 Bison",
+        "gemini": "Gemini 2",
         "llama": "Llama 2 7B",
         "mistral": "Mistral 7B",
         "gemma": "Gemma 7B",
-        "gemini": "Gemini 2",
     }
+
+    ordered_actors = [
+        actor for actor in actor_name_map.keys() if actor in fractions_df.index
+    ]
+    if ordered_actors:
+        fractions_df = fractions_df.loc[ordered_actors]
 
     fractions_df.index = [
         actor_name_map.get(actor, actor.upper()) for actor in fractions_df.index
@@ -247,11 +253,17 @@ def plot_krippendorff_heatmap(alpha_df, title):
         "gpt4": "GPT-4",
         "claude": "Claude Haiku",
         "bison": "PaLM 2 Bison",
+        "gemini": "Gemini 2",
         "llama": "Llama 2 7B",
         "mistral": "Mistral 7B",
         "gemma": "Gemma 7B",
-        "gemini": "Gemini 2",
     }
+
+    ordered_actors = [
+        actor for actor in actor_name_map.keys() if actor in alpha_df.index
+    ]
+    if ordered_actors:
+        alpha_df = alpha_df.loc[ordered_actors, ordered_actors]
 
     alpha_df.index = [
         actor_name_map.get(actor, actor.upper()) for actor in alpha_df.index
@@ -318,7 +330,7 @@ for filename, language in datasets:
     alpha_df = build_krippendorff_matrix(df, actor_dict)
     print(f"\nKrippendorff's Alpha Matrix:\n{alpha_df}")
 
-    title = f"Inter-Model Agreement (Krippendorff's Alpha) - {language}"
+    title = f"Inter-Model Agreement - {language}"
     plot_krippendorff_heatmap(alpha_df, title)
 
 # %%
