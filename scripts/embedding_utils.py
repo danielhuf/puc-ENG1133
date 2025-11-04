@@ -1399,9 +1399,9 @@ def cross_analyze_multiple_languages(
                     fontsize=8 if not is_base else 10,
                 )
 
-            ax.set_xlabel("1 - Intra-Actor Similarity")
-            ax.set_ylabel("Inter-Actor Similarity")
-            ax.set_title(f"{language_code}")
+            ax.set_xlabel("1 - Intra-Actor Similarity", fontsize=14)
+            ax.set_ylabel("Inter-Actor Similarity", fontsize=14)
+            ax.set_title(f"{language_code}", fontweight="bold", fontsize=16)
             ax.grid(True, alpha=0.3)
             ax.set_xlim(0.2, 1.0)
             ax.set_ylim(0, 0.8)
@@ -1429,7 +1429,7 @@ def cross_analyze_multiple_languages(
         fig1.colorbar(scatter_base, ax=ax_base, label="Reason Consistency Score")
 
     plt.suptitle(
-        "Intra-Actor similarity vs. inter-Actor similarity Analysis - Base (Color = Reason-wise consistency)",
+        "Intra-Actor Similarity vs. Inter-Actor Similarity Analysis (Color = Reason-wise Similarity)",
         fontsize=16,
         fontweight="bold",
     )
@@ -1449,7 +1449,7 @@ def cross_analyze_multiple_languages(
             scatter_last = scatter
 
     plt.suptitle(
-        "Intra-Actor similarity vs. inter-Actor similarity Analysis - International (Color = Reason-wise consistency)",
+        "Intra-Actor Similarity vs. Inter-Actor Similarity Analysis (Color = Reason-wise similarity)",
         fontsize=16,
         fontweight="bold",
     )
@@ -1458,7 +1458,7 @@ def cross_analyze_multiple_languages(
 
     if scatter_last:
         cbar_ax = fig2.add_axes([0.93, 0.15, 0.02, 0.7])
-        fig2.colorbar(scatter_last, cax=cbar_ax, label="Reason Consistency Score")
+        fig2.colorbar(scatter_last, cax=cbar_ax, label="Reason Similarity Score")
 
     plt.show()
 
