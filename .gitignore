@@ -40,7 +40,6 @@ ENV/
 .DS_Store
 
 # Project specific
-*.csv
 *.log
 !requirements.json
 deprecated/
