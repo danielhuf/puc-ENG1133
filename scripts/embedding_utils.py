@@ -1463,3 +1463,70 @@ def cross_analyze_multiple_languages(
     plt.show()
 
     return fig1, fig2
+
+
+def extract_llm_human_similarities_for_anova(
+    all_embeddings_dict: Dict[str, Dict[str, np.ndarray]],
+    language_codes: List[str],
+) -> pd.DataFrame:
+    """Extract all LLM vs human similarity pairs for ANOVA analysis.
+
+    Creates a table with all reasoning comparisons from each model for each scenario,
+    allowing statistical comparison of how different models and languages compare to humans.
+    All reasonings from the same model are treated as samples from that model.
+
+    Args:
+        all_embeddings_dict: Dictionary mapping language codes to embedding dictionaries
+        language_codes: List of language codes to process
+
+    Returns:
+        DataFrame with columns: actor1, actor2, language, similarity, scenario_idx
+        where actor1 is the model name (e.g. "claude"), actor2 is always "human"
+    """
+
+    results = []
+
+    for language_code in tqdm(language_codes, desc="Processing languages"):
+        embeddings_dict = all_embeddings_dict[language_code]
+        actors, reason_types = identify_actors_and_reasons(embeddings_dict)
+
+        # Get human embedding
+        if "top_comment_embedding" not in embeddings_dict:
+            continue
+        human_embeddings = embeddings_dict["top_comment_embedding"]
+        n_scenarios = human_embeddings.shape[0]
+
+        # Process each LLM actor
+        for actor in actors:
+            if actor == "redditor":
+                continue
+
+            # Get all available reasoning types for this actor
+            for reason_type in reason_types:
+                col_name = f"{actor}_{reason_type}_embedding"
+                if col_name not in embeddings_dict:
+                    continue
+
+                llm_embeddings = embeddings_dict[col_name]
+
+                # Compare each scenario
+                for scenario_idx in range(n_scenarios):
+                    llm_emb = llm_embeddings[scenario_idx].reshape(1, -1)
+                    human_emb = human_embeddings[scenario_idx].reshape(1, -1)
+
+                    llm_emb_norm = normalize(llm_emb, norm="l2")
+                    human_emb_norm = normalize(human_emb, norm="l2")
+
+                    similarity = cosine_similarity(llm_emb_norm, human_emb_norm)[0, 0]
+
+                    results.append(
+                        {
+                            "actor1": actor,
+                            "actor2": "human",
+                            "language": language_code,
+                            "similarity": float(similarity),
+                            "scenario_idx": scenario_idx,
+                        }
+                    )
+
+    return pd.DataFrame(results)
