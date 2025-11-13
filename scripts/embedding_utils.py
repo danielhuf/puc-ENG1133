@@ -328,6 +328,10 @@ def plot_row_similarity_comparison(
         actors_set.add(actor1)
         actors_set.add(actor2)
 
+    # Remove redditor from actors_set
+    if "redditor" in actors_set:
+        actors_set.remove("redditor")
+
     # Apply custom actor ordering
     desired_order = [
         "redditor",
