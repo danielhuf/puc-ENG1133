@@ -47,10 +47,12 @@ def calculate_verdict_fractions(df, actor_dict):
     """
     Calculate the fraction of each verdict for each actor.
     Aggregates counts across all label columns for each actor.
-    Returns a DataFrame with actors as rows and verdicts as columns.
+    Returns (fractions_df, counts_df, totals_series).
     """
     verdicts = ["NTA", "YTA", "NAH", "ESH", "INFO"]
-    results = {}
+    fraction_results = {}
+    count_results = {}
+    totals = {}
 
     for actor, cols in actor_dict.items():
         all_verdicts = pd.Series(dtype=object)
@@ -63,18 +65,25 @@ def calculate_verdict_fractions(df, actor_dict):
         total = len(all_verdicts)
 
         fractions = {}
+        counts = {}
         for verdict in verdicts:
-            fractions[verdict] = (
-                verdict_counts.get(verdict, 0) / total if total > 0 else 0
-            )
+            count = verdict_counts.get(verdict, 0)
+            counts[verdict] = count
+            fractions[verdict] = count / total if total > 0 else 0
 
-        results[actor] = fractions
+        fraction_results[actor] = fractions
+        count_results[actor] = counts
+        totals[actor] = total
 
-    return pd.DataFrame(results).T
+    fractions_df = pd.DataFrame(fraction_results).T
+    counts_df = pd.DataFrame(count_results).T.fillna(0).astype(int)
+    totals_series = pd.Series(totals)
+
+    return fractions_df, counts_df, totals_series
 
 
 # %%
-def plot_verdict_distribution(fractions_df, title):
+def plot_verdict_distribution(fractions_df, totals_series, title):
     """
     Create a grouped bar chart showing verdict distribution for each actor.
     """
@@ -95,10 +104,12 @@ def plot_verdict_distribution(fractions_df, title):
     ]
     if ordered_actors:
         fractions_df = fractions_df.loc[ordered_actors]
+        totals_series = totals_series.loc[ordered_actors]
 
-    fractions_df.index = [
-        actor_name_map.get(actor, actor.upper()) for actor in fractions_df.index
-    ]
+    actor_keys = list(fractions_df.index)
+    display_index = [actor_name_map.get(actor, actor.upper()) for actor in actor_keys]
+    fractions_display = fractions_df.copy()
+    fractions_display.index = display_index
 
     _, ax = plt.subplots(figsize=(12, 6))
 
@@ -120,12 +131,21 @@ def plot_verdict_distribution(fractions_df, title):
 
     offset = width * n_actors / 2 - width / 2
 
-    for i, (actor, row) in enumerate(fractions_df.iterrows()):
+    for i, actor_key in enumerate(actor_keys):
+        row = fractions_df.loc[actor_key]
+        display_name = fractions_display.index[i]
         values = [row[verdict] for verdict in verdicts]
+        total = totals_series.get(actor_key, 0)
+        errors = [np.sqrt(p * (1 - p) / total) if total > 0 else 0 for p in values]
         position = x + (i * width) - offset
-        _ = ax.bar(position, values, width, label=actor, color=colors[i % len(colors)])
+        _ = ax.bar(
+            position,
+            values,
+            width,
+            label=display_name,
+            color=colors[i % len(colors)],
+        )
 
-        errors = [0.01] * len(verdicts)
         ax.errorbar(
             position,
             values,
@@ -321,11 +341,12 @@ for filename, language in datasets:
 
     actor_dict = extract_actor_labels(df)
 
-    fractions_df = calculate_verdict_fractions(df, actor_dict)
+    fractions_df, counts_df, totals_series = calculate_verdict_fractions(df, actor_dict)
     print(f"\nVerdict fractions:\n{fractions_df}")
+    print(f"\nVerdict counts:\n{counts_df}")
 
     title = f"Verdict Distribution - {language}"
-    plot_verdict_distribution(fractions_df, title)
+    plot_verdict_distribution(fractions_df, totals_series, title)
 
     alpha_df = build_krippendorff_matrix(df, actor_dict)
     print(f"\nKrippendorff's Alpha Matrix:\n{alpha_df}")
