@@ -428,7 +428,8 @@ anova_pg = pg.anova(
     between=["actor1", "language"],
     detailed=True,
 )
-print(anova_pg)
+anova_pg_display = anova_pg.drop(columns=["MS"], errors="ignore")
+print(anova_pg_display)
 
 anova_pg_output_path = "../results/anova_table_pingouin.json"
 anova_pg.to_json(anova_pg_output_path, orient="records", indent=2)
