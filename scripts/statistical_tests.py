@@ -1,10 +1,3 @@
-"""
-ANOVA Analysis of LLM vs Human Similarities
-
-This script performs ANOVA to compare the variance in similarity scores
-between different LLM models and humans across multiple languages.
-"""
-
 # %%
 import pandas as pd
 import numpy as np

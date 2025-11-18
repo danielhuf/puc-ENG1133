@@ -1,8 +1,3 @@
-# %% [markdown]
-# ## 4. Verdict-wise Analysis
-#
-# This analyzes verdicts given by the LLM actors and human redditors to the moral dilemmas.
-
 # %%
 import pandas as pd
 import matplotlib.pyplot as plt
