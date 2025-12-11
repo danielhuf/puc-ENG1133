@@ -4,7 +4,7 @@ Disciplina cursada em 2025.2
 
 Nota final obtida: 10.0
 
-# Investigating Large Language Models’Responses to Everyday Moral Dilemmas in Different Cultural Contexts
+# Investigating Large Language Models’ Responses to Everyday Moral Dilemmas in Different Cultural Contexts
 
 This project investigates how different Large Language Models (LLMs) respond to everyday moral dilemmas sourced from Reddit's "Am I the Asshole" (AITA) community across five languages. The research analyzes the consistency, diversity, and semantic similarities between AI models' moral reasoning compared to human judgments.
 
